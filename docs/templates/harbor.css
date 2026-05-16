@@ -1,0 +1,20 @@
+:root {
+	--color-background: #eff5fb;
+	--color-background-box: #fff;
+	--color-surface-raised: #e6effb;
+	--color-surface-inset: #eaf1f9;
+	--color-foreground: #132b4e;
+	--color-text: #304968;
+	--color-muted: #516a87;
+	--color-primary: #175cce;
+	--color-highlight: #10499f;
+	--color-border: #c6d8ee;
+	--color-line: #dae5f2;
+	--color-signal: #12806f;
+	--radius: 0.85rem;
+}
+body { background-image: radial-gradient(ellipse at 90% 0, #cee3ff, transparent 50rem); }
+h1 { font-weight: 750; }
+main > section { box-shadow: 0 0.5rem 2rem #132b4e06; }
+.project-nav strong { letter-spacing: -0.05em; }
+.metric { border-top: 3px solid var(--color-primary); }

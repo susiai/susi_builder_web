@@ -1,0 +1,15 @@
+{
+  "apihost": "http://localhost:11434",
+  "systemprompt": "You are not a very talkative chatbot, rather grumpy and terse. Unless asked otherwise, respond with just one sentence.",
+  "model": "",
+  "chatProvider": "browser",
+  "chatLocalPrimary": "qwen3-0.6b-webgpu",
+  "chatLocalFallback": "qwen3-0.6b-wasm",
+  "thinking": false,
+  "pages": {},
+  "mcpServers": [],
+  "agents": {
+    "maxToolCalls": 100,
+    "toolDescriptions": {}
+  }
+}

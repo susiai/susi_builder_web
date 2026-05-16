@@ -1,0 +1,33 @@
+.dictation-microphone:not([hidden]) {
+	display: flex;
+	align-items: center;
+	margin-block: 0.35rem;
+	color: var(--color-muted);
+	font-size: 0.8rem;
+}
+
+.dictation-microphone label:not([hidden]) {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.25rem 0.6rem;
+}
+
+.dictation-microphone meter {
+	width: min(10rem, 42vw);
+	height: 0.85rem;
+}
+
+.dictation-microphone button {
+	padding: 0.2rem 0.5rem;
+	font-size: inherit;
+}
+
+#chat-microphone {
+	max-width: var(--chat-width);
+	margin-inline: auto;
+}
+
+#studio-microphone {
+	padding-inline: 0.8rem;
+}

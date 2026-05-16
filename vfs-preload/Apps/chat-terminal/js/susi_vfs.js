@@ -1,5 +1,5 @@
 /**
- * Virtual File System (VFS) using IndexedDB with Bash-like Commands
+ * Virtual File System (VFS) with Bash-like Commands
  *
  * This script implements a simple key-value store using IndexedDB, which is a low-level API
  * for client-side storage of significant amounts of structured data, including files/blobs.
@@ -25,6 +25,10 @@ Object.defineProperty(window, 'vfsReady', {
 
 async function initializeVfs() {
   try {
+    if (window.susi?.files) {
+      window.vfs = await createProjectVfs(window.susi.files);
+      return window.vfs;
+    }
     const db = await new Promise((resolve, reject) => {
       const request = window.indexedDB.open('vfs', 1);
       request.onupgradeneeded = () => {
@@ -38,7 +42,7 @@ async function initializeVfs() {
     });
     window.vfs = createIndexedVfs(db);
   } catch (error) {
-    if (window.location.protocol !== 'file:') {
+    if (window.susi?.files || window.location.protocol !== 'file:') {
       vfsReadyPromise = undefined;
       throw error;
     }
@@ -313,70 +317,147 @@ function createIndexedVfs(db) {
   };
 }
 
-function createMemoryVfs() {
-  const files = new Map();
+async function createProjectVfs(projectFiles) {
+  const path = '.chat-terminal-vfs.json';
+  async function load() {
+    const file = await projectFiles.readFile(path).catch(error => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    const files = new Map();
+    if (file) {
+      for (const [key, entry] of JSON.parse(await file.text())) {
+        if (entry.bytes === undefined) {
+          files.set(key, entry.value);
+          continue;
+        }
+        const bytes = Uint8Array.from(atob(entry.bytes), char => char.charCodeAt(0));
+        files.set(key, entry.type === undefined ? bytes.buffer : new Blob([bytes], { type: entry.type }));
+      }
+    }
+    return { file, files };
+  }
+
+  async function save({ file, files }, change) {
+    change(files);
+    const entries = [];
+    for (const [key, value] of files) {
+      const blob = value instanceof Blob;
+      const bytes = blob ? new Uint8Array(await value.arrayBuffer())
+        : value instanceof ArrayBuffer ? new Uint8Array(value)
+        : ArrayBuffer.isView(value) ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+        : null;
+      if (bytes === null) {
+        entries.push([key, { value }]);
+        continue;
+      }
+      let binary = '';
+      for (let offset = 0; offset < bytes.length; offset += 8192) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+      }
+      entries.push([key, { bytes: btoa(binary), type: blob ? value.type : undefined }]);
+    }
+    await projectFiles.writeFile(path, JSON.stringify(entries), { ifUnchanged: file });
+    return files;
+  }
+
+  return createMemoryVfs((await load()).files, async change => {
+    const before = await load();
+    try {
+      return await save(before, change);
+    } catch (error) {
+      // A second preview may have saved while this one was writing. Reapply the change once.
+      const latest = await load();
+      if (latest.file?.lastModified === before.file?.lastModified) throw error;
+      return save(latest, change);
+    }
+  });
+}
+
+function createMemoryVfs(files = new Map(), persist) {
+  let pending = Promise.resolve();
+  const read = action => persist ? pending.then(() => action(files)) : action(files);
+  const update = change => {
+    if (!persist) {
+      change(files);
+      return;
+    }
+    const write = pending.then(async () => { files = await persist(change); });
+    // Older shell commands can schedule a write without awaiting it. Keep later operations ordered.
+    pending = write.catch(error => console.error('Unable to save terminal files:', error));
+    return write;
+  };
   const get = async (key) => {
-    if (!files.has(key)) throw 'Key not found';
-    return structuredClone(files.get(key));
+    return read(current => {
+      if (!current.has(key)) throw 'Key not found';
+      return structuredClone(current.get(key));
+    });
   };
   const validatePath = (path) => {
     if (!path.startsWith('/')) throw new Error('Invalid path');
   };
 
   return {
-    persistent: false,
-    async put(key, value) {
-      files.set(key, structuredClone(value));
+    persistent: Boolean(persist),
+    put(key, value) {
+      const copy = structuredClone(value);
+      return update(current => current.set(key, copy)) ?? Promise.resolve();
     },
     getasync: get,
     get,
     touch(path) {
       validatePath(path);
-      files.set(path, '');
+      return update(current => current.set(path, ''));
     },
     rm(path) {
       validatePath(path);
-      files.delete(path);
+      return update(current => current.delete(path));
     },
     cp(srcPath, destPath) {
       validatePath(srcPath);
       validatePath(destPath);
-      files.set(destPath, files.has(srcPath) ? structuredClone(files.get(srcPath)) : {});
+      return update(current => current.set(destPath, current.has(srcPath) ? structuredClone(current.get(srcPath)) : {}));
     },
     mv(srcPath, destPath) {
       validatePath(srcPath);
       validatePath(destPath);
-      const value = files.has(srcPath) ? files.get(srcPath) : {};
-      files.delete(srcPath);
-      files.set(destPath, value);
+      return update(current => {
+        const value = current.has(srcPath) ? current.get(srcPath) : {};
+        current.delete(srcPath);
+        current.set(destPath, value);
+      });
     },
-    ls(path) {
+    async ls(path) {
       if (!path.endsWith('/')) throw new Error('Invalid directory path');
-      const entries = [...files.keys()].filter((key) => key.startsWith(path)).sort();
-      return Promise.resolve(entries.map((key) => key.slice(path.length)));
+      return read(current => [...current.keys()].filter(key => key.startsWith(path)).sort()
+        .map(key => key.slice(path.length)));
     },
     cat(path) {
       if (path.endsWith('/')) throw new Error('Invalid file path');
-      console.log(files.has(path) ? files.get(path) : '');
+      return read(current => console.log(current.get(path) ?? ''));
     },
     find(pattern) {
       const regex = new RegExp(pattern);
-      console.log([...files.keys()].sort().filter((key) => regex.test(key)).join('\n'));
+      return read(current => console.log([...current.keys()].sort().filter(key => regex.test(key)).join('\n')));
     },
     async du() {
-      let size = 0;
-      for (const [key, value] of files) {
-        size += key.length + (value?.byteLength ?? value?.size ?? value?.length ?? 0);
-      }
-      return size;
+      return read(current => {
+        let size = 0;
+        for (const [key, value] of current) {
+          size += key.length + (value?.byteLength ?? value?.size ?? value?.length ?? 0);
+        }
+        return size;
+      });
     },
     async df() {
-      throw new Error('Storage estimate not available for temporary files');
+      throw new Error(persist ? 'Storage estimate not available in preview' : 'Storage estimate not available for temporary files');
     },
     grep(path, pattern) {
       validatePath(path);
-      const content = files.has(path) ? files.get(path) : '';
-      if (new RegExp(pattern).test(content)) console.log(`${path}: ${content}`);
+      return read(current => {
+        const content = current.get(path) ?? '';
+        if (new RegExp(pattern).test(content)) console.log(`${path}: ${content}`);
+      });
     }
   };
 }

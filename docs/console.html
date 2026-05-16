@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
+		<meta name="color-scheme" content="dark" />
+		<title>Console</title>
+		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+
+		<link rel="stylesheet" href="css/webstation.css?v=8a84b050" />
+		<link rel="stylesheet" href="js/vendor/xterm-6.0.0.css?v=854a7c0f" />
+		<link rel="stylesheet" href="css/console.css?v=9fb52ff0" />
+		<script defer src="js/vfs.js?v=6a2f831b"></script>
+		<script defer src="js/vendor/xterm-6.0.0.js?v=a2dfc94e"></script>
+		<script defer src="js/vendor/xterm-addon-fit-0.11.0.js?v=8d46ae81"></script>
+		<script defer src="js/vendor/xterm-readline-2.0.0.js?v=4ce60188"></script>
+		<script defer src="js/vendor/just-bash-3.6.1.browser.js?v=00810d4b"></script>
+		<script defer src="js/just-bash-vfs.js?v=c52acc19"></script>
+		<script defer src="js/console-history.js?v=25e908ff"></script>
+		<script defer src="js/console.js?v=44968529"></script>
+		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+	</head>
+	<body id="console-page">
+		<iframe id="site-menu" title="Pages" src="navigation.html#console"></iframe>
+		<main id="console">
+			<header>
+				<h1>Console</h1>
+				<span id="console-cwd" aria-label="Working directory">/</span>
+				<button id="console-interrupt" type="button" hidden>Interrupt</button>
+				<button id="console-clear-history" type="button" title="Clear saved commands and output and restart the console">clear history</button>
+			</header>
+			<section id="console-shell" aria-label="Bash terminal">
+				<p id="console-status" role="status"><span id="console-status-message" data-vfs-open-status>Opening workspace…</span>
+					<button id="console-reload" type="button" hidden>Reload console</button></p>
+				<div id="console-output"></div>
+			</section>
+			<p id="console-history-status" role="status" hidden></p>
+			<p id="console-keys"><kbd>Tab</kbd> Complete path <span>·</span> <kbd>↑</kbd> <kbd>↓</kbd> History <span>·</span> <kbd>Ctrl+C</kbd> Interrupt <span>·</span> <kbd>Shift+Enter</kbd> New line</p>
+		</main>
+	</body>
+</html>

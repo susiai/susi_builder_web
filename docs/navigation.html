@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" id="menu-document">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<base target="_parent" />
+		<title>Webstation navigation</title>
+		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css?v=8a84b050" />
+		<style>
+			#site-brand::before,
+			#site-brand::after {
+				width: 3.9rem;
+			}
+
+			#site-brand::after {
+				content: "";
+				background: url("img/susi26_black_small.png") center / 3.25rem auto no-repeat;
+			}
+		</style>
+		<script defer src="js/navigation.js?v=e6619da0"></script>
+	</head>
+	<body>
+		<nav id="site-nav" aria-label="Pages">
+			<a id="site-brand" href="index.html" aria-label="SUSI Builder home"><span>Builder</span></a>
+			<ul>
+				<li id="index"><a href="index.html">Home</a></li>
+				<li id="apps"><a href="apps.html">Apps</a></li>
+				<li id="create-app"><a href="create_app.html">Create App</a></li>
+				<li class="nav-group">
+					<button type="button" aria-expanded="false" aria-controls="build-pages">Build Tools</button>
+					<ul class="nav-submenu" id="build-pages" hidden>
+						<li id="chat"><a href="chat.html">Chat</a></li>
+						<li id="console"><a href="console.html">Console</a></li>
+					</ul>
+				</li>
+				<li class="nav-group">
+					<button type="button" aria-expanded="false" aria-controls="configuration-pages">Configuration</button>
+					<ul class="nav-submenu" id="configuration-pages" hidden>
+						<li id="models"><a href="models.html">Models</a></li>
+						<li id="tools"><a href="tools.html">Tools</a></li>
+						<li id="workspace"><a href="workspace.html">Workspace</a></li>
+					</ul>
+				</li>
+			</ul>
+			<form id="site-page-chooser" hidden>
+				<select id="site-page-select" aria-label="Go to page"></select>
+				<button type="submit">Go</button>
+			</form>
+		</nav>
+	</body>
+</html>

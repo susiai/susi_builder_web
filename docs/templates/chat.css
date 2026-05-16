@@ -1,0 +1,79 @@
+[data-purpose="chat"] > .project-header {
+	padding-block: 1rem;
+	margin-bottom: 0.75rem;
+}
+
+[data-purpose="chat"] > header h1 {
+	max-width: none;
+	font-size: clamp(1.8rem, 4vw, 2.75rem);
+	overflow-wrap: anywhere;
+}
+
+#project-chat, #chat-configuration {
+	grid-column: 1 / -1;
+}
+
+#chat-log {
+	display: flex;
+	flex-direction: column;
+	gap: 0.65rem;
+	min-height: min(10rem, 30vh);
+	max-height: min(28rem, 50vh);
+	margin-bottom: 1rem;
+	padding: 0.85rem;
+	overflow: auto;
+	border: 1px solid var(--color-line);
+	background: var(--color-surface-inset);
+	border-radius: var(--radius);
+}
+
+#chat-log article {
+	flex: none;
+	width: fit-content;
+	max-width: 90%;
+	padding: 0.65rem 0.85rem;
+	overflow-wrap: anywhere;
+}
+
+#chat-log article[data-role="user"] {
+	align-self: end;
+	background: var(--color-surface-raised);
+}
+
+#chat-log h3, #chat-model-status {
+	font: 600 0.85rem var(--font-body);
+	color: var(--color-muted);
+	overflow-wrap: anywhere;
+}
+
+#chat-model-status.project-error {
+	padding: 0.65rem 0.85rem;
+	border: 1px solid var(--color-border);
+	border-inline-start: 3px solid var(--color-amber, currentColor);
+	background: var(--color-surface-raised);
+	color: var(--color-foreground);
+}
+
+#chat-log p { white-space: pre-wrap; }
+#chat-message { min-height: 4rem; }
+.chat-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+#chat-auth { margin-block: 0.75rem; }
+#chat-status, #chat-config-status { min-height: 1.5em; margin-top: 0.75rem; }
+
+#chat-configuration {
+	display: grid;
+	grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+	gap: 0.75rem 1.5rem;
+	align-items: start;
+}
+
+#chat-configuration > :is(h2, p) { grid-column: 1 / -1; margin-bottom: 0; }
+#chat-config-form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+#chat-config-form :is(input, textarea), #chat-models { margin-bottom: 0.75rem; }
+#chat-key-help { display: block; margin-bottom: 0.75rem; }
+#chat-thinking-label { display: flex; align-items: center; gap: 0.5rem; margin-block: 0.25rem 0.75rem; }
+#chat-thinking { width: auto; margin: 0; }
+
+@media (max-width: 44rem) {
+	#chat-configuration { grid-template-columns: minmax(0, 1fr); }
+}

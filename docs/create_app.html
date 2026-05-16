@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>SUSI Builder Create App</title>
+		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css?v=8a84b050" />
+		<link rel="stylesheet" href="css/templates.css?v=8daf89e3" />
+		<script defer src="js/vfs.js?v=6a2f831b"></script>
+		<script defer src="js/vfs-projects.js?v=a85b089b"></script>
+		<script defer src="js/page-settings.js?v=60de7c53"></script>
+		<script defer src="js/vfs-browser.js?v=bac7015e"></script>
+		<script defer src="js/vendor/lossless-json-4.3.3.min.js?v=0fa78b94"></script>
+		<script defer src="js/table-formats.js?v=a35963de"></script>
+		<script defer src="js/vendor/acorn-8.18.0.js?v=4fe40c95"></script>
+		<script defer src="js/vfs-preview.js?v=94f040f1"></script>
+		<script defer src="templates/catalog.js?v=9d955c55"></script>
+		<script defer src="js/template-engine.js?v=35684950"></script>
+		<script defer src="js/templates.js?v=65736cc2"></script>
+		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+	</head>
+	<body id="templates-page">
+		<iframe id="site-menu" title="Pages" src="navigation.html#create-app"></iframe>
+		<header>
+			<h1>Create App</h1>
+			<p>Mix a design, a purpose and the tools to make it yours.</p>
+			<a href="#template-preview-panel">Jump to preview ↓</a>
+		</header>
+		<div id="layout">
+			<main id="templates-workspace">
+				<form id="template-form" autocomplete="off">
+					<label for="template-name">App name</label>
+					<small id="template-name-help">This is a folder name under /Apps/ in the virtual file system.</small>
+					<input id="template-name" name="name" value="My next website" maxlength="80" required
+						aria-describedby="template-name-help" />
+					<fieldset id="template-designs"><legend><span>01</span> Choose a design</legend></fieldset>
+					<fieldset>
+						<legend><span>02</span> Give it a purpose</legend>
+						<label for="template-purpose">What are you making?</label>
+						<select id="template-purpose" name="purpose" aria-describedby="template-purpose-help"></select>
+						<p id="template-purpose-help"></p>
+						<label for="template-layout">Page structure</label>
+						<select id="template-layout" name="layout" aria-describedby="template-layout-help"></select>
+						<p id="template-layout-help"></p>
+					</fieldset>
+					<fieldset id="template-blocks">
+						<legend><span>03</span> Pick the building blocks</legend>
+						<div id="template-content-blocks"></div>
+						<p id="template-notebook-help" hidden>Save the note in the live preview to include it in your new app.</p>
+						<fieldset id="template-data-blocks"><legend>Tables and data</legend></fieldset>
+						<div id="template-data-source" hidden>
+							<label for="template-dataset">Dataset for these views</label>
+							<select id="template-dataset"><option value="">River survey (sample)</option>
+								<optgroup label="Workspace files"></optgroup></select>
+							<button type="button" id="template-choose-data">From computer…</button>
+							<input id="template-data-file" type="file" accept=".csv,.jsonl,.parquet" hidden />
+							<p id="template-data-status" role="status">Choose a CSV, JSONL or Parquet file to include its records in your app.</p>
+						</div>
+						<fieldset id="template-game-blocks"><legend>Games and game design</legend></fieldset>
+						<p id="template-game-help" hidden>Level, sprite and playtest edits in the preview are included when you create the app.</p>
+					</fieldset>
+					<fieldset id="template-libraries">
+						<legend><span>04</span> Bring your tools</legend>
+						<p>Purpose suggests a starting selection. Every library is optional and copied into your app.</p>
+						<div id="template-library-options">
+							<fieldset id="template-independent-libraries">
+								<legend>Additional libraries</legend>
+								<div></div>
+							</fieldset>
+						</div>
+					</fieldset>
+					<div id="template-create-bar">
+						<p id="template-library-summary"></p>
+						<button id="template-create" type="submit" disabled>Create App</button>
+						<p id="template-status" data-vfs-open-status role="status">Opening the workspace…</p>
+					</div>
+					<section id="template-created" aria-labelledby="template-created-title" hidden>
+						<h2 id="template-created-title">Your app is ready to customize</h2>
+						<p>Just tell Chat what you want your app to do.</p>
+						<p id="template-created-path"></p>
+						<nav id="template-created-links" aria-label="Continue with the new app"></nav>
+					</section>
+				</form>
+				<aside id="template-preview-panel" aria-labelledby="template-preview-title" tabindex="-1">
+					<div class="template-preview-toolbar">
+						<div><small>Your starting point</small><h2 id="template-preview-title">Live preview</h2></div>
+						<button id="template-phone" type="button" aria-pressed="false">Phone view</button>
+						<button id="template-refresh" type="button">Refresh</button>
+					</div>
+					<p id="template-preview-status" role="status">Preparing your first preview…</p>
+					<div id="template-frame-shell"><iframe id="template-preview" title="Generated website preview"></iframe></div>
+					<details id="template-files"><summary>App files</summary><pre id="template-file-list"></pre></details>
+				</aside>
+			</main>
+		</div>
+	</body>
+</html>

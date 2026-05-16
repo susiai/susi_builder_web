@@ -1,0 +1,24 @@
+:root {
+	--color-background: #f4efe4;
+	--color-background-box: #fffaf0;
+	--color-surface-raised: #ebe4d5;
+	--color-surface-inset: #eee8db;
+	--color-foreground: #292a20;
+	--color-text: #434638;
+	--color-muted: #646856;
+	--color-primary: #874526;
+	--color-highlight: #613019;
+	--color-border: #c9c3ae;
+	--color-line: #dbd4bf;
+	--color-signal: #677b4b;
+	--font-body: Georgia, 'Times New Roman', serif;
+	--font-display: Georgia, 'Times New Roman', serif;
+	--radius: 0;
+}
+body { background-image: linear-gradient(#b7a98b0a 1px, transparent 1px); background-size: 100% 0.4rem; }
+h1 { font-weight: 400; font-style: italic; }
+h2 { font-weight: 400; }
+.project-nav, .eyebrow, label, th, button, .button { font-family: ui-sans-serif, system-ui, sans-serif; }
+main > section { border-width: 1px 0 0; background: transparent; }
+.project-header { border-bottom: 3px double var(--color-border); }
+.metric strong { font-weight: 400; }

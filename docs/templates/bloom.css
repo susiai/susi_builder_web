@@ -1,0 +1,23 @@
+:root {
+	color-scheme: dark;
+	--color-background: #1a1228;
+	--color-background-box: #261c36;
+	--color-surface-raised: #352446;
+	--color-surface-inset: #20172e;
+	--color-foreground: #fff0e6;
+	--color-text: #ebd9de;
+	--color-muted: #c5a8bb;
+	--color-primary: #ffad90;
+	--color-highlight: #ffc6ad;
+	--color-border: #69445f;
+	--color-line: #49344d;
+	--color-signal: #c5a7fb;
+	--radius: 1.3rem;
+}
+body { background-image: radial-gradient(ellipse at 85% 4rem, #553058, transparent 48rem); }
+h1 { font-weight: 800; letter-spacing: -0.065em; }
+button, .button { color: #24172e; border-radius: 3rem; }
+button:hover, .button:hover { color: #24172e; }
+.project-header h1 { max-width: 13ch; }
+.project-nav strong::before { content: '✳'; margin-right: 0.5em; color: var(--color-primary); }
+.feature-art { border-radius: 4rem 4rem 1rem 1rem; }

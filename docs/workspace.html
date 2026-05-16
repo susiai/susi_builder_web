@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>SUSI Builder Workspace</title>
+		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css?v=8a84b050" />
+		<link rel="stylesheet" href="css/config-reset.css?v=257bb228" />
+		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+	</head>
+	<body id="workspace-page">
+		<iframe id="site-menu" title="Pages" src="navigation.html#workspace"></iframe>
+		<header>
+			<h1>Workspace</h1>
+			<p>Back up, restore, or reset the files and settings stored in this browser.</p>
+		</header>
+
+		<div id="layout">
+			<main>
+				<section id="workspace-backups" aria-labelledby="workspace-backups-title">
+					<h2 id="workspace-backups-title">Backups and recovery</h2>
+					<p>Download projects, settings, run activity, saved editor drafts, and conversations.
+						API keys stored for this tab are excluded. Browser storage is tied to this origin and can be cleared by the browser.</p>
+					<p>Backups include speech settings. Download the speech models again after restoring a backup.</p>
+					<p id="storage-origin"></p><p id="storage-status" data-vfs-open-status role="status"></p>
+					<button id="storage-persist" type="button" disabled>Request persistent storage</button>
+					<label for="backup-password">Backup passphrase (optional)</label>
+					<input id="backup-password" type="password" autocomplete="new-password" minlength="12" />
+					<p>Use at least 12 characters for an encrypted .wsbackup file. An empty passphrase creates a readable ZIP.
+						Keep the passphrase separately; it cannot be recovered. Limit: 128 MiB unpacked, 64 MiB for encrypted archives.</p>
+					<button id="backup-export" type="button" disabled>Download workspace backup</button>
+					<button id="backup-safety" type="button" hidden>Download previous restore safety backup</button>
+					<label for="backup-file">Restore a workspace backup</label>
+					<input id="backup-file" type="file" accept=".zip,.wsbackup" />
+					<button id="backup-inspect" type="button" disabled>Inspect backup</button>
+					<p id="backup-summary"></p><button id="backup-restore" type="button" disabled>Restore backup…</button>
+					<p id="backup-status" role="status"></p>
+				</section>
+				<section id="workspace-reset" aria-labelledby="workspace-reset-title">
+					<h2 id="workspace-reset-title">Reset workspace</h2>
+					<p><strong>Reset Default Files</strong> restores files from <code>vfs-preload</code>, including
+						<code>config.json</code>. Other files, conversations, and console history are kept.</p>
+					<p><strong>Clear</strong> deletes the workspace database, saved conversations, and console history for this address.</p>
+					<div class="workspace-actions">
+						<button id="open-default-files-reset" type="button" disabled>Reset Default Files</button>
+						<button id="open-vfs-reset" type="button" disabled>Clear</button>
+					</div>
+					<p id="vfs-reset-status" role="status"></p>
+				</section>
+			</main>
+		</div>
+		<dialog id="vfs-reset-dialog" aria-labelledby="vfs-reset-title" aria-describedby="vfs-reset-warning">
+			<h2 id="vfs-reset-title">Clear?</h2>
+			<p id="default-files-reset-warning" hidden>Files supplied in <code>vfs-preload</code> will be restored,
+				including <code>config.json</code> and the default Skills. This replaces edits to those files.
+				Other files and folders, conversations, console history, and session credentials are kept.</p>
+			<p id="vfs-reset-warning">This permanently deletes the workspace database, including apps, files, settings, downloaded
+				models, and the restore safety backup. It also clears saved conversations, console history, and session credentials.
+				Opening a page such as Apps starts a fresh workspace with the default files.</p>
+			<p id="vfs-reset-error" role="alert"></p>
+			<form method="dialog">
+				<button id="cancel-vfs-reset" type="submit" autofocus>Cancel</button>
+				<button id="confirm-vfs-reset" type="button">Clear</button>
+			</form>
+		</dialog>
+		<dialog id="backup-restore-dialog" aria-labelledby="backup-restore-title">
+			<h2 id="backup-restore-title">Replace the workspace with this backup?</h2>
+			<p>Projects, configuration, saved editor drafts, and conversations will be replaced.
+				Stop agent runs first. The current workspace will be retained as the previous restore safety backup.
+				All other workstation pages will reload. External browser actions cannot be undone by a backup.</p>
+			<p id="backup-restore-error" role="alert"></p><div class="workspace-actions">
+				<button id="backup-restore-cancel" type="button" autofocus>Cancel</button>
+				<button id="backup-restore-confirm" type="button">Replace workspace</button></div>
+		</dialog>
+
+		<script src="js/vfs.js?v=6a2f831b" data-vfs-skip-preload></script>
+		<script src="js/transformer-model-assets.js?v=9de616b6"></script>
+		<script src="js/stt.js?v=91cb9caf"></script>
+		<script src="js/tts.js?v=123a3be2"></script>
+		<script src="js/vendor/zip-2.25.0.min.js?v=49bb1d59"></script>
+		<script src="js/vfs-zip.js?v=33ab8df8"></script>
+		<script src="js/workspace.js?v=e6900765"></script>
+	</body>
+</html>

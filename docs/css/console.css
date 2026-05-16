@@ -1,0 +1,127 @@
+html:has(#console-page) {
+	overflow: hidden;
+}
+
+#console-page {
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+	height: min(100dvh, var(--console-viewport, 100dvh));
+	min-height: 0;
+	overflow: hidden;
+}
+
+#console-page > #site-menu {
+	position: static;
+}
+
+#console {
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr) auto auto;
+	min-height: 0;
+	background: var(--color-surface-inset);
+}
+
+#console > header {
+	--page-heading-size: 1.6rem;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	min-height: 2.75rem;
+	padding: 0.55rem 0.8rem;
+	border-bottom: 1px solid var(--color-line);
+	background: linear-gradient(105deg, var(--color-secondary), var(--color-background-box));
+	font: 600 0.78rem/1.35 var(--font-mono);
+}
+
+#console > header h1 {
+	flex: none;
+}
+
+#console-shell {
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+	border-radius: 0;
+	background: var(--color-surface-inset);
+}
+
+#console-shell:has(#console-status[hidden]) {
+	grid-template-rows: minmax(0, 1fr);
+}
+
+#console-status {
+	margin: 0;
+	padding: 0.6rem 0.8rem;
+	border-bottom: 1px solid var(--color-line);
+	color: var(--color-muted);
+}
+
+#console-reload {
+	margin-inline-start: 0.5rem;
+	padding: 0.25rem 0.5rem;
+	font: inherit;
+}
+
+#console-cwd {
+	flex: 1;
+	min-width: 3ch;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-primary);
+}
+
+#console-output {
+	min-width: 0;
+	min-height: 0;
+	padding: 0.65rem 0.65rem 0.65rem 0.8rem;
+	overflow: hidden;
+}
+
+#console-output .xterm-helper-textarea {
+	min-height: 0;
+}
+
+#console-interrupt, #console-clear-history {
+	flex: none;
+	padding: 0.3rem 0.6rem;
+	border-color: var(--color-border);
+	background: var(--color-surface-raised);
+	color: var(--color-foreground);
+	font: inherit;
+}
+
+#console-interrupt:hover, #console-clear-history:hover {
+	border-color: var(--color-primary);
+}
+
+#console-history-status {
+	margin: 0;
+	padding: 0.35rem 0.8rem;
+	color: var(--color-accent-detail);
+	font-size: 0.8rem;
+}
+
+#console-keys {
+	margin: 0;
+	padding: 0.45rem 0.8rem;
+	border-top: 1px solid var(--color-line);
+	background: var(--color-background-box);
+	color: var(--color-muted);
+	font-size: 0.77rem;
+}
+
+#console-keys span {
+	padding-inline: 0.35rem;
+}
+
+@media (pointer: coarse) {
+	#console-keys {
+		display: none;
+	}
+}
+

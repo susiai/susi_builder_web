@@ -183,7 +183,7 @@ async function bootstrapTerminal() {
         log('Using temporary storage. Reloading clears files and settings. Open the terminal over HTTP to save them.');
     }
     log("Homepage: https://susi.ai");
-    log("Git&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: https://github.com/susiai/susi_chat");
+    log("Git&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: https://github.com/susiai/susi_builder_web");
     if (!athome) log("API Host: " + apihost);
     log("Just Chat or type 'help' for a list of available commands");
     initializeTerminal();

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>SUSI Builder Apps</title>
+		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css?v=8a84b050" />
+		<link rel="stylesheet" href="css/projects.css?v=3d451a5a" />
+		<script defer src="js/vfs.js?v=6a2f831b"></script>
+		<script defer src="js/vfs-projects.js?v=a85b089b"></script>
+		<script defer src="js/vfs-browser.js?v=bac7015e"></script>
+		<script defer src="js/vendor/zip-2.25.0.min.js?v=49bb1d59"></script>
+		<script defer src="js/vfs-zip.js?v=33ab8df8"></script>
+		<script defer src="js/projects.js?v=c8103c02"></script>
+		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+	</head>
+	<body id="projects-page">
+		<iframe id="site-menu" title="Pages" src="navigation.html#apps"></iframe>
+		<header>
+			<h1>Apps</h1>
+			<p>Create an app, open it in Chat, or use its star to pin it to Home.</p>
+		</header>
+		<main id="layout">
+			<p id="project-status" data-vfs-open-status role="status" hidden></p>
+			<p id="project-loading" role="status">Loading apps…</p>
+			<ul id="project-list" aria-label="Apps" aria-busy="true">
+				<li id="project-new-tile"><button id="project-new" type="button" disabled>New App</button></li>
+			</ul>
+		</main>
+		<dialog id="project-dialog" aria-labelledby="project-dialog-title">
+			<h2 id="project-dialog-title">New app</h2>
+			<p><a href="create_app.html">Start from a template</a></p>
+			<form id="project-form">
+				<label for="project-name">App name</label>
+				<input id="project-name" required maxlength="120" autocomplete="off" autofocus />
+				<p id="project-error" role="alert" hidden></p>
+				<div>
+					<button id="project-cancel" type="button">Cancel</button>
+					<button id="project-create" type="submit">Create app</button>
+				</div>
+			</form>
+		</dialog>
+	</body>
+</html>

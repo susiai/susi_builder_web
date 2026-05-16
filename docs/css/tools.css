@@ -1,0 +1,77 @@
+#agent-tools-help,
+#agent-call-limit-help {
+	color: var(--color-muted);
+}
+
+#agent-max-tool-calls {
+	max-width: 12rem;
+}
+
+#agent-call-limit-help {
+	margin-top: 0.5rem;
+}
+
+#agent-tools-toolbar {
+	position: sticky;
+	z-index: 1;
+	top: var(--nav-height);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	margin-bottom: 1.25rem;
+	padding-block: 0.75rem;
+	border-bottom: 1px solid var(--color-line);
+	background: var(--color-background-box);
+}
+
+#agent-tools-status {
+	margin: 0;
+	color: var(--color-muted);
+	font-size: 0.85rem;
+}
+
+#agent-tools-status[data-error] {
+	color: var(--color-accent-detail);
+}
+
+#agent-tools-save {
+	flex: none;
+}
+
+#agent-tool-list {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1.25rem;
+}
+
+#agent-tool-list > div {
+	min-width: 0;
+}
+
+#agent-tool-list label {
+	display: block;
+	margin-bottom: 0.45rem;
+}
+
+#agent-tool-list code {
+	color: var(--color-primary);
+}
+
+#agent-tool-list textarea {
+	display: block;
+	min-height: 7rem;
+}
+
+@media (max-width: 57rem) {
+	#agent-tool-list {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 28rem) {
+	#agent-tools-toolbar {
+		align-items: start;
+		flex-direction: column;
+	}
+}

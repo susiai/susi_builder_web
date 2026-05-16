@@ -1,0 +1,56 @@
+.project-nav, .project-header, #layout, body > footer {
+	width: min(var(--page-width), 100% - 2 * var(--page-gutter));
+	margin-inline: auto;
+}
+.project-nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem 2rem; padding-block: 1.4rem; border-bottom: 1px solid var(--color-line); }
+.project-nav strong { font-size: 1.15rem; }
+.project-nav ul { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; margin: 0; padding: 0; list-style: none; }
+.project-nav a { font-size: 0.85rem; text-decoration: none; }
+body > .project-header { padding-block: clamp(2.5rem, 7vw, 6rem) 2.5rem; margin-bottom: 1.25rem; }
+.project-header h1 { max-width: 16ch; }
+.project-header > p { max-width: 58ch; font-size: 1.15rem; }
+.eyebrow { color: var(--color-primary); font: 650 0.75rem/1.5 var(--font-mono); letter-spacing: 0.15em; text-transform: uppercase; }
+.project-header .button { margin-top: 0.75rem; }
+#layout { display: grid; gap: 1.25rem; padding-bottom: 2rem; }
+#layout > aside { display: none; }
+.section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 1rem; }
+.section-heading h2 { margin: 0; }
+.metrics, .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.metric small { display: block; }
+.metric strong { display: block; margin-block: 0.4rem; font-size: clamp(1.8rem, 4vw, 3rem); line-height: 1.2; letter-spacing: -0.05em; }
+.metric p { margin: 0; font-size: 0.8rem; color: var(--color-signal); }
+.feature-art { min-height: 7rem; margin-bottom: 1rem; background: linear-gradient(135deg, var(--color-primary), transparent), repeating-linear-gradient(30deg, transparent 0 1.5rem, var(--color-signal) 1.5rem 1.6rem); opacity: 0.8; }
+.features article:nth-child(2) .feature-art { filter: hue-rotate(35deg); }
+.features article:nth-child(3) .feature-art { filter: hue-rotate(110deg); }
+.features p { font-size: 0.9rem; }
+.table-scroll { overflow: auto; }
+#table-filter { max-width: 22rem; margin-bottom: 0.75rem; }
+.chart { width: 100%; min-height: 18rem; }
+.chart:empty::before { content: 'Preparing the chart…'; color: var(--color-muted); }
+#three-scene { display: block; width: 100%; aspect-ratio: 16 / 9; margin-bottom: 0.75rem; background: #0b1020; }
+#three-rotation { width: min(100%, 20rem); }
+#three-status:empty { display: none; }
+#code-editor { height: 18rem; border: 1px solid var(--color-line); border-radius: var(--radius); }
+#terminal { height: 17rem; padding: 0.75rem; background: #11151d; border-radius: var(--radius); }
+.sample-form { max-width: 35rem; }
+.sample-form > input, .sample-form > textarea { margin-bottom: 1rem; }
+.demo-status { margin-top: 0.75rem; color: var(--color-muted); }
+.project-note { color: var(--color-muted); font-size: 0.85rem; }
+.project-error { color: #cf5773; }
+.hljs-keyword, .hljs-built_in, .hljs-title { color: var(--color-signal); }
+.hljs-string, .hljs-number { color: var(--color-primary); }
+.hljs-comment { color: var(--color-muted); }
+.library-list { display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0; list-style: none; }
+.library-list li { padding: 0.2rem 0.6rem; background: var(--color-surface-raised); border: 1px solid var(--color-line); border-radius: var(--radius); font: 0.8rem var(--font-mono); }
+body > footer { padding-block: 1.5rem 2rem; border-top: 1px solid var(--color-line); color: var(--color-muted); font-size: 0.85rem; }
+body[data-layout='columns'] main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 1.25rem; }
+body[data-layout='columns'] main > section { margin-bottom: 0; }
+body[data-layout='columns'] main > :is(#overview, #chart-section, #table-section) { grid-column: 1 / -1; }
+body[data-layout='sidebar'] #layout { grid-template-columns: minmax(0, 1fr) 15rem; align-items: start; }
+body[data-layout='sidebar'] #layout > aside { position: sticky; top: 1rem; display: block; }
+@media (max-width: 52rem) {
+	body[data-layout='columns'] main, body[data-layout='sidebar'] #layout { grid-template-columns: minmax(0, 1fr); }
+	body[data-layout='sidebar'] #layout > aside { position: static; }
+	.metrics, .features { grid-template-columns: minmax(0, 1fr); }
+	.project-header h1 { max-width: none; }
+}

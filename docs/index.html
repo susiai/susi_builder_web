@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>SUSI Builder — Agentic coding</title>
+		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+
+		<link rel="stylesheet" href="css/webstation.css?v=8a84b050" />
+		<link rel="stylesheet" href="css/projects.css?v=3d451a5a" />
+		<script src="js/vfs.js?v=6a2f831b" defer></script>
+		<script defer src="js/vfs-projects.js?v=a85b089b"></script>
+		<script defer src="js/vfs-browser.js?v=bac7015e"></script>
+		<script defer src="js/projects.js?v=c8103c02"></script>
+		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+	</head>
+	<body>
+		<iframe id="site-menu" title="Pages" src="navigation.html#index"></iframe>
+		<header id="hero">
+			<div>
+				<small>Agentic coding</small>
+				<h1>SUSI Builder</h1>
+				<p>Chat with an agent in your browser to build your own chatbots and web apps. Start from Templates.</p>
+				<p>No cloud required. Easily attach a model on your own computer.</p>
+				<p>Run Bash-like commands in Console.</p>
+				<nav class="hero-actions" aria-label="Start building">
+					<a href="apps.html">Open apps →</a>
+					<a href="create_app.html">Create an app</a>
+				</nav>
+			</div>
+			<picture>
+				<source
+					media="(max-width: 43rem)"
+					srcset="assets/webstation-hero-terminal-mobile.webp?v=ee36a071"
+					width="1086"
+					height="1448"
+				/>
+				<img
+					src="assets/webstation-hero-terminal.webp?v=db4b684d"
+					alt="An ivory 1980s computer seen from its right side, with a browser terminal facing the heading."
+					width="1903"
+					height="826"
+					fetchpriority="high"
+					decoding="async"
+				/>
+			</picture>
+		</header>
+		<main id="layout">
+			<p id="project-status" data-vfs-open-status role="status" hidden></p>
+			<section id="pinned-apps" aria-labelledby="pinned-apps-title" hidden>
+				<h2 id="pinned-apps-title">Pinned apps</h2>
+				<ul id="project-list" aria-label="Pinned apps"></ul>
+			</section>
+		</main>
+		<footer>
+			<small><a href="impressum.html">Imprint</a></small>
+		</footer>
+	</body>
+</html>

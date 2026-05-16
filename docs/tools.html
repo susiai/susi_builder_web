@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>SUSI Builder Tools</title>
+		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css?v=8a84b050" />
+		<link rel="stylesheet" href="css/tools.css?v=7e5bef74" />
+		<script defer src="js/vfs.js?v=6a2f831b"></script>
+		<script defer src="js/llm-client.js?v=723c3b96"></script>
+		<script defer src="js/llm.js?v=5eb60f13"></script>
+		<script defer src="js/tool-settings.js?v=0cc00b47"></script>
+		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+	</head>
+	<body id="tools-page">
+		<iframe id="site-menu" title="Pages" src="navigation.html#tools"></iframe>
+		<header>
+			<h1>Tools</h1>
+			<p>Edit tool descriptions and set how many tools an agent can call per reply.</p>
+		</header>
+		<div id="layout">
+			<main>
+				<section aria-labelledby="agent-tools-title">
+					<h2 id="agent-tools-title">Tool settings</h2>
+					<p id="agent-tools-help">Save your changes to use them in new chat replies.</p>
+					<form id="agent-tools-form" aria-describedby="agent-tools-help">
+						<div id="agent-tools-toolbar">
+							<p id="agent-tools-status" data-vfs-open-status role="status">Loading tools…</p>
+							<button id="agent-tools-save" type="submit" disabled>Save settings</button>
+						</div>
+						<label for="agent-max-tool-calls">Maximum tool calls per reply</label>
+						<input id="agent-max-tool-calls" name="maxToolCalls" type="number" min="1" step="1"
+							max="9007199254740991" required readonly aria-describedby="agent-call-limit-help" />
+						<p id="agent-call-limit-help">Total across all tools for one reply, including calls requested
+							together. The agent can still give a final answer after reaching this limit. Default: 100.</p>
+						<h3>Tool descriptions</h3>
+						<div id="agent-tool-list"></div>
+					</form>
+				</section>
+			</main>
+		</div>
+	</body>
+</html>

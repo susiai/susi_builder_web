@@ -1,0 +1,65 @@
+:root {
+	color-scheme: light;
+	--color-background: #fff5f6;
+	--color-background-box: #fffdfa;
+	--color-surface-raised: #fae7ef;
+	--color-surface-inset: #fff0e4;
+	--color-foreground: #401c36;
+	--color-text: #56364d;
+	--color-muted: #76536a;
+	--color-primary: #aa175d;
+	--color-highlight: #831044;
+	--color-border: #c99caf;
+	--color-line: #ead5df;
+	--color-signal: #146e60;
+	--font-display: Georgia, 'Times New Roman', serif;
+	--radius: 1rem;
+	accent-color: var(--color-primary);
+}
+
+body > .project-nav {
+	border: 0;
+	background: linear-gradient(90deg, #cb417d 0 40%, #ad91d6 40% 60%, #f0b364 60% 80%, #76b7a1 80%) bottom / 100% .22rem no-repeat;
+}
+.project-nav strong { color: var(--color-primary); overflow-wrap: anywhere; }
+body > .project-header {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	column-gap: clamp(1rem, 4vw, 4rem);
+	padding-inline: clamp(1.25rem, 4vw, 3.75rem);
+	border-radius: .8rem 3rem;
+	background: linear-gradient(110deg, #fff1e0, #ffe4ef 60%, #eee1fa);
+}
+.project-header > * { grid-column: 1; }
+.project-header h1 { color: var(--color-primary); font-style: italic; overflow-wrap: anywhere; }
+.project-header .button { justify-self: start; }
+.project-header::after {
+	content: '';
+	grid-column: 2;
+	grid-row: 1 / 6;
+	place-self: center;
+	width: clamp(6rem, 19vw, 14rem);
+	aspect-ratio: 1;
+	transform: rotate(-14deg);
+	background:
+		radial-gradient(circle closest-side, #ffc963 29%, transparent 31%),
+		radial-gradient(ellipse 23% 28% at 50% 28%, #ed71a6 98%, transparent 100%),
+		radial-gradient(ellipse 28% 23% at 72% 50%, #bc9add 98%, transparent 100%),
+		radial-gradient(ellipse 23% 28% at 50% 72%, #f3a078 98%, transparent 100%),
+		radial-gradient(ellipse 28% 23% at 28% 50%, #78bba4 98%, transparent 100%);
+}
+button, .button { border-radius: 2rem; }
+:is(.metrics, .features) > article:nth-child(3n + 1) { background-color: #ffedf3; }
+:is(.metrics, .features) > article:nth-child(3n + 2) { background-color: #e6f4e9; }
+:is(.metrics, .features) > article:nth-child(3n) { background-color: #f1eafb; }
+.features article .feature-art {
+	border-radius: 2.5rem .6rem;
+	background: radial-gradient(ellipse at 17% 95%, #ee8eb6 0 34%, transparent 35%),
+		radial-gradient(ellipse at 72% 8%, #92ceba 0 33%, transparent 34%), #ffda97;
+}
+
+@media (max-width: 42rem) {
+	.project-header::after { grid-row: 1; width: 2.75rem; }
+	.project-header .eyebrow { align-self: center; }
+	.project-header > :not(.eyebrow) { grid-column: 1 / -1; }
+}

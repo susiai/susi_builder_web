@@ -75,7 +75,7 @@ function createChatExecutor(deps) {
         if (!commandName) {
             const names = allCommands.map((cmd) => cmd.name).sort();
             return (
-                'This is a terminal for the <a href="https://github.com/susiai/susi_chat" target="_blank">SUSI.AI Chat v2.</a>\n\n' +
+                'This is a terminal for the <a href="https://github.com/susiai/susi_builder_web" target="_blank">SUSI.AI Chat v2.</a>\n\n' +
                 'It is a simple terminal emulator with a virtual file system.\n\n' +
                 'You can either chat with the AI assistant or use the following commands:\n\n' +
                 names.join(', ') +
@@ -110,7 +110,7 @@ function createChatExecutor(deps) {
             const lines = [
                 'SUSI.AI Chat v2 - AI Chat and Terminal Emulator',
                 'Homepage: https://susi.ai',
-                'Git&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: https://github.com/susiai/susi_chat'
+                'Git&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: https://github.com/susiai/susi_builder_web'
             ];
             if (typeof athome !== 'undefined' && !athome && typeof apihost !== 'undefined') {
                 lines.push('API Host: ' + apihost);
