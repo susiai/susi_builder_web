@@ -41,8 +41,9 @@ const configStore = (() => {
     const cloneDefaults = () => JSON.parse(JSON.stringify(defaultConfig));
 
     const save = async () => {
-        if (!cache || !window.vfs) return;
+        if (!cache) return;
         try {
+            const vfs = await window.vfsReady;
             await vfs.put(path, JSON.stringify(cache, null, 2));
         } catch (error) {
             console.error('Error saving config:', error);
@@ -50,17 +51,13 @@ const configStore = (() => {
     };
 
     const load = async () => {
+        const vfs = await window.vfsReady;
         try {
-            await window.vfsReady;
-            try {
-                const raw = await vfs.get(path);
-                cache = JSON.parse(raw);
-            } catch (error) {
-                cache = cloneDefaults();
-                await save();
-            }
+            const raw = await vfs.get(path);
+            cache = JSON.parse(raw);
         } catch (error) {
             cache = cloneDefaults();
+            await save();
         }
         return cache;
     };
@@ -122,9 +119,10 @@ async function initializeConfig() {
 }
 
 async function bootstrapTerminal() {
+    const vfs = await window.vfsReady;
     await initializeConfig();
-    uiCommands = new UICommands(window.vfs, terminal);
-    shell = createShell(window.vfs, { hooks: { edit: (path) => uiCommands.edit(path) } });
+    uiCommands = new UICommands(vfs, terminal);
+    shell = createShell(vfs, { hooks: { edit: (path) => uiCommands.edit(path) } });
     const chatExecutor = createChatExecutor({
         log,
         chatHistory,
@@ -181,6 +179,9 @@ async function bootstrapTerminal() {
         }
     };
     log("SUSI.AI Chat v2 - AI Chat and Terminal Emulator");
+    if (vfs.persistent === false) {
+        log('Using temporary storage. Reloading clears files and settings. Open the terminal over HTTP to save them.');
+    }
     log("Homepage: https://susi.ai");
     log("Git&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: https://github.com/susiai/susi_chat");
     if (!athome) log("API Host: " + apihost);
@@ -507,4 +508,7 @@ function scrollToBottom() {
     terminal.scrollIntoView(false);
 }
 
-bootstrapTerminal();
+bootstrapTerminal().catch((error) => {
+    console.error('Unable to start the chat terminal:', error);
+    terminal.textContent = `Unable to start the chat terminal. ${error.message || error}`;
+});

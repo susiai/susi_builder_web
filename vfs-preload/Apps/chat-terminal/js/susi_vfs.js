@@ -12,36 +12,44 @@
  *
  * The VFS includes Bash-like commands for manipulating the virtual file system.
  *
- * The VFS is exposed as a global object (window.vfs) for easy access from other parts of the application.
+ * Await window.vfsReady to initialize the VFS and expose it as window.vfs.
  */
 
-// Open a connection to the database
-const openRequest = indexedDB.open('vfs', 1);
-
-let vfsReadyResolve;
-let vfsReadyReject;
-window.vfsReady = new Promise((resolve, reject) => {
-  vfsReadyResolve = resolve;
-  vfsReadyReject = reject;
+let vfsReadyPromise;
+Object.defineProperty(window, 'vfsReady', {
+  get() {
+    if (!vfsReadyPromise) vfsReadyPromise = initializeVfs();
+    return vfsReadyPromise;
+  }
 });
 
-let db;
-
-// Handle the database upgrade event
-openRequest.onupgradeneeded = function (event) {
-  const db = event.target.result;
-  // Check if the object store exists before creating it
-  if (!db.objectStoreNames.contains('keyValueStore')) {
-    db.createObjectStore('keyValueStore', { keyPath: 'id' });
+async function initializeVfs() {
+  try {
+    const db = await new Promise((resolve, reject) => {
+      const request = window.indexedDB.open('vfs', 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains('keyValueStore')) {
+          db.createObjectStore('keyValueStore', { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    window.vfs = createIndexedVfs(db);
+  } catch (error) {
+    if (window.location.protocol !== 'file:') {
+      vfsReadyPromise = undefined;
+      throw error;
+    }
+    console.warn('Unable to open IndexedDB for this local file. Using temporary storage.', error);
+    window.vfs = createMemoryVfs();
   }
-};
+  return window.vfs;
+}
 
-// Handle the successful opening of the database
-openRequest.onsuccess = function (event) {
-  db = event.target.result;
-
-  // Define the vfs object with methods to interact with the database
-  const vfs = {
+function createIndexedVfs(db) {
+  return {
     put: function (key, value) {
       return new Promise((resolve, reject) => {
         const transaction = db.transaction(['keyValueStore'], 'readwrite');
@@ -303,14 +311,72 @@ openRequest.onsuccess = function (event) {
       };
     }
   };
+}
 
-  // Attach the vfs object to the window object
-  window.vfs = vfs;
-  if (vfsReadyResolve) vfsReadyResolve(vfs);
-};
+function createMemoryVfs() {
+  const files = new Map();
+  const get = async (key) => {
+    if (!files.has(key)) throw 'Key not found';
+    return structuredClone(files.get(key));
+  };
+  const validatePath = (path) => {
+    if (!path.startsWith('/')) throw new Error('Invalid path');
+  };
 
-// Handle errors when opening the database
-openRequest.onerror = function (event) {
-  console.error('Error opening database:', event.target.errorCode);
-  if (vfsReadyReject) vfsReadyReject(event.target.errorCode);
-};
+  return {
+    persistent: false,
+    async put(key, value) {
+      files.set(key, structuredClone(value));
+    },
+    getasync: get,
+    get,
+    touch(path) {
+      validatePath(path);
+      files.set(path, '');
+    },
+    rm(path) {
+      validatePath(path);
+      files.delete(path);
+    },
+    cp(srcPath, destPath) {
+      validatePath(srcPath);
+      validatePath(destPath);
+      files.set(destPath, files.has(srcPath) ? structuredClone(files.get(srcPath)) : {});
+    },
+    mv(srcPath, destPath) {
+      validatePath(srcPath);
+      validatePath(destPath);
+      const value = files.has(srcPath) ? files.get(srcPath) : {};
+      files.delete(srcPath);
+      files.set(destPath, value);
+    },
+    ls(path) {
+      if (!path.endsWith('/')) throw new Error('Invalid directory path');
+      const entries = [...files.keys()].filter((key) => key.startsWith(path)).sort();
+      return Promise.resolve(entries.map((key) => key.slice(path.length)));
+    },
+    cat(path) {
+      if (path.endsWith('/')) throw new Error('Invalid file path');
+      console.log(files.has(path) ? files.get(path) : '');
+    },
+    find(pattern) {
+      const regex = new RegExp(pattern);
+      console.log([...files.keys()].sort().filter((key) => regex.test(key)).join('\n'));
+    },
+    async du() {
+      let size = 0;
+      for (const [key, value] of files) {
+        size += key.length + (value?.byteLength ?? value?.size ?? value?.length ?? 0);
+      }
+      return size;
+    },
+    async df() {
+      throw new Error('Storage estimate not available for temporary files');
+    },
+    grep(path, pattern) {
+      validatePath(path);
+      const content = files.has(path) ? files.get(path) : '';
+      if (new RegExp(pattern).test(content)) console.log(`${path}: ${content}`);
+    }
+  };
+}

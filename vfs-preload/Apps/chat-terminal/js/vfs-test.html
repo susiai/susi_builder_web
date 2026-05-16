@@ -20,6 +20,7 @@
 
       async function test() {
         try {
+          const vfs = await window.vfsReady;
 
           // Test touch
           vfs.touch('/test/file.txt');
@@ -64,9 +65,11 @@
           await new Promise(resolve => setTimeout(resolve, 100));
 
           // Test df
-          const dfResult = await vfs.df();
-          output.innerText += `df: ${JSON.stringify(dfResult)}\n`;
-          await new Promise(resolve => setTimeout(resolve, 100));
+          if (vfs.persistent !== false) {
+            const dfResult = await vfs.df();
+            output.innerText += `df: ${JSON.stringify(dfResult)}\n`;
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
 
           // Test grep
           vfs.touch('/test/grep_test.txt');
@@ -99,10 +102,7 @@
         }
       }
 
-      // Run the test function after a short delay to ensure the vfs object is initialized
-      setTimeout(() => {
-        test();
-      }, 100);
+      test();
     </script>
   </body>
 </html>

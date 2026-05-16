@@ -2,6 +2,8 @@
 
 This project is a browser-based chat terminal that blends an LLM chat UI with a lightweight, terminal-like command interface. It also includes a virtual file system (VFS) concept so chat-produced code can be captured and managed in a file-like structure.
 
+To run locally with persistent files and settings, run `sh run_server.sh` from this directory and open `http://localhost:8000/`. If you open `index.html` directly and the browser blocks IndexedDB for local files, the terminal uses temporary storage that is cleared on reload.
+
 ## Core principles implemented so far
 
 ### 1) Terminal-first UI with chat as the default command
