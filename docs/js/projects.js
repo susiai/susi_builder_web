@@ -61,8 +61,13 @@
 		chat.title = "Build and edit this app with the coding agent";
 		chat.href = `chat.html?${new URLSearchParams({ project })}`;
 		chat.setAttribute("aria-label", `Chat for ${project}`);
+		const code = document.createElement("a");
+		code.textContent = "Code";
+		code.title = "Edit this app in Code Studio";
+		code.href = `code-studio.html?${new URLSearchParams({ file: project + "index.html" })}`;
+		code.setAttribute("aria-label", `Code Studio for ${project}`);
 		view.textContent = "View";
-		actions.append(chat, view);
+		actions.append(chat, code, view);
 		if (newTile) {
 			const download = document.createElement("button");
 			download.type = "button";

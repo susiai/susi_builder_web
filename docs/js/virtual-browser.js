@@ -14,7 +14,7 @@
 	let preview;
 
 	if (!isVfsPreviewFolder(folder)) {
-		status.textContent = "Select View on the Apps page to preview an app.";
+		status.textContent = "Select View in Apps or Play on a folder with index.html in Explorer.";
 		return;
 	}
 

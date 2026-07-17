@@ -121,7 +121,7 @@
 					if (task) task.status = "interrupted";
 				}
 				activity.value = JSON.stringify(state, null, 2);
-			} catch { /* Preserve malformed user data for manual repair. */ }
+			} catch { /* Preserve malformed user data for repair in Code Studio. */ }
 		}
 		await susiBackup.restore(vfs, snapshot, expectedDigest);
 		try { sessionStorage.setItem("webstation.backup-restored", "1"); } catch {}

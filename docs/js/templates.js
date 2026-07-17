@@ -388,10 +388,13 @@
 			const play = createProjectPreviewLink(project.path);
 			play.textContent = 'Preview app ↗';
 			play.removeAttribute('aria-label');
+			const studio = document.createElement('a');
+			studio.href = 'code-studio.html?' + new URLSearchParams({ file: project.path + 'index.html' });
+			studio.textContent = 'Open Code Studio';
 			const chat = document.createElement('a'); chat.href = 'chat.html?' + new URLSearchParams({ project: project.path });
 			chat.id = 'template-continue-chat';
 			chat.textContent = 'Continue in Chat';
-			document.getElementById('template-created-links').replaceChildren(chat, play);
+			document.getElementById('template-created-links').replaceChildren(chat, play, studio);
 			const created = document.getElementById('template-created');
 			created.hidden = false;
 			const fileCount = project.entries.filter(entry => !entry.path.endsWith('/')).length;

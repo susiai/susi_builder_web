@@ -923,7 +923,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 			}
 			projectEmpty.hidden = paths.length > (projectsRoot ? 1 : 0);
 			projectEmpty.textContent = projectsRoot ? "Work in Projects or create a folder here."
-				: "No projects yet. Select New project to get started.";
+				: "No projects yet. Create one or add an index.html to a folder in Explorer.";
 			projectStatus.hidden = true;
 			if (activeProject && !paths.includes(activeProject) && generation) {
 				generation.abort(new DOMException("The selected project is no longer available.", "AbortError"));

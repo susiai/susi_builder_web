@@ -69,7 +69,7 @@ and pass `model` and `device` to the client. The generated app's Configuration f
 Choose **VFS notebook**, or add the **App file editor** block to any other purpose. The starter includes
 `notes.md` and `js/notebook.js`. Save in the Create App preview to carry your draft into the new project.
 After **Create App → Preview app**, **Save note** writes the actual project file. **Reload note** reads
-the latest saved version. The standalone export can open and download text files.
+the latest version, including edits made in Code Studio. The standalone export can open and download text files.
 The [project file API](../../README.md#how-the-preview-runs-without-a-server) also works in other generated apps.
 
 ## Data workspace

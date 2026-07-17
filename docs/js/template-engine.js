@@ -207,7 +207,7 @@ const templateEngine = (() => {
 			(settings.blocks.some(id => ['level-editor', 'sprite-editor'].includes(id)) ?
 				'Use Download game data to replace js/game-data.js with your edits.\n' : '') +
 			(settings.blocks.includes('sprite-editor') ? 'Use Download PNG to export the player as a transparent sprite.\n' : '') +
-			(playtestNotes !== undefined ? 'Use Download PLAYTEST.md to save revised notes from the page.\n' : '') +
+			(playtestNotes !== undefined ? 'Edit PLAYTEST.md in Code Studio or download revised notes from the page.\n' : '') +
 			(settings.libraries.includes('matter') ? 'Edit js/physics.js to change the bodies, gravity and simulation controls.\n' : '') +
 			'Use the app preview or publish the exported folder on any static web host.\n' +
 			'For the terminal demo, shell files live in memory for the lifetime of the page.\n\n## Libraries\n\n' +

@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>SUSI Builder Explorer</title>
+		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
+		<link rel="stylesheet" href="css/vfs-editor.css?v=01011d71" />
+		<style>
+			#finder-rename {
+				width: min(28rem, calc(100% - 2rem));
+				padding: var(--panel-padding);
+				border: 1px solid var(--color-border);
+				border-radius: var(--radius);
+				background: var(--color-background-box);
+				color: var(--color-foreground);
+			}
+			#finder-rename::backdrop { background: rgb(3 5 11 / 78%); }
+			#finder-rename form > div { display: flex; justify-content: flex-end; gap: 0.5rem; }
+			#finder-rename-error { color: var(--color-accent-detail); overflow-wrap: anywhere; }
+			#finder-rename-error:empty { display: none; }
+			#finder-list [data-role="file-details"] {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) auto;
+				align-items: center;
+				column-gap: 0.5rem;
+				flex: 1;
+				min-width: 0;
+			}
+			#finder-list [data-role="file-size"] {
+				color: var(--color-muted);
+				font-size: 0.75rem;
+				white-space: nowrap;
+				text-align: end;
+			}
+			@media (max-width: 28rem) {
+				#finder-list [data-role="file-details"] { grid-template-columns: minmax(0, 1fr); }
+				#finder-list [data-role="file-size"] { text-align: start; }
+			}
+		</style>
+		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+	</head>
+	<body id="explorer-page">
+		<iframe id="site-menu" title="Pages" src="navigation.html#explorer"></iframe>
+		<header>
+			<h1>Explorer</h1>
+			<p>Browse, preview, and edit files stored in this browser.</p>
+		</header>
+
+		<main id="layout">
+			<section id="finder-window" aria-labelledby="finder-title">
+				<div id="finder-titlebar">
+					<h2 id="finder-title">Explorer</h2>
+					<div id="finder-toolbar">
+						<button type="button" id="finder-create-folder">New Folder</button>
+						<button type="button" id="finder-upload-button">Upload Files</button>
+						<button type="button" id="finder-upload-zip">Upload ZIP</button>
+						<input type="file" id="finder-upload-input" multiple />
+					</div>
+				</div>
+				<p id="finder-status" data-vfs-open-status role="status"></p>
+				<div id="finder-body">
+					<section id="finder-files" aria-label="Files" tabindex="0">
+						<ul id="finder-list" aria-label="Root contents"></ul>
+						<p id="finder-empty">No files yet. Upload a file or create a folder.</p>
+					</section>
+					<section id="finder-preview" aria-labelledby="finder-preview-title">
+						<h2 id="finder-preview-title">Preview</h2>
+						<div id="finder-preview-body" tabindex="0">
+							<p>Select a file to preview it.</p>
+						</div>
+					</section>
+				</div>
+			</section>
+		</main>
+
+		<dialog id="finder-rename" aria-labelledby="finder-rename-title">
+			<form>
+				<h2 id="finder-rename-title">Rename file</h2>
+				<label id="finder-rename-label" for="finder-rename-name">File name</label>
+				<input id="finder-rename-name" required autocomplete="off" autofocus />
+				<p id="finder-rename-error" role="alert"></p>
+				<div>
+					<button id="finder-rename-cancel" type="button">Cancel</button>
+					<button id="finder-rename-submit" type="submit">Rename</button>
+				</div>
+			</form>
+		</dialog>
+
+		<dialog id="vfs-editor" aria-labelledby="vfs-editor-title" aria-describedby="vfs-editor-path">
+			<div id="vfs-editor-header">
+				<h2 id="vfs-editor-title">Edit file</h2>
+				<span id="vfs-editor-mode"></span>
+				<p id="vfs-editor-path"></p>
+			</div>
+			<div id="vfs-editor-input"></div>
+			<div id="vfs-editor-footer">
+				<p id="vfs-editor-status" role="status"></p>
+				<div id="vfs-editor-actions">
+					<button type="button" id="vfs-editor-discard">Discard</button>
+					<button type="button" id="vfs-editor-save" aria-keyshortcuts="Control+S Meta+S">Save</button>
+				</div>
+			</div>
+		</dialog>
+
+		<script defer src="js/vfs.js?v=6a2f831b"></script>
+	<script defer src="js/vfs-projects.js?v=a85b089b"></script>
+		<script defer src="js/page-settings.js?v=60de7c53"></script>
+		<script defer src="js/vfs-browser.js?v=f36d53fe"></script>
+		<script defer src="js/vendor/lossless-json-4.3.3.min.js?v=0fa78b94"></script>
+		<script defer src="js/vendor/hyparquet-1.32.0.min.js?v=f5167313"></script>
+		<script defer src="js/table-formats.js?v=a35963de"></script>
+		<script defer src="js/vendor/zip-2.25.0.min.js?v=49bb1d59"></script>
+		<script defer src="js/vfs-zip.js?v=33ab8df8"></script>
+		<script defer src="js/highlight.min.js?v=b3d289c6"></script>
+		<script defer src="js/vendor/ace-1.45.2/ace.js?v=e1e8dc2a"></script>
+		<script defer src="js/vendor/ace-1.45.2/ext-modelist.js?v=9a44627d"></script>
+		<script defer src="js/vfs-editor.js?v=f56293f0"></script>
+		<script>
+			window.addEventListener("DOMContentLoaded", () => {
+	const finderList = document.getElementById("finder-list");
+	const finderEmpty = document.getElementById("finder-empty");
+	const createFolderButton = document.getElementById("finder-create-folder");
+	const uploadButton = document.getElementById("finder-upload-button");
+	const uploadZipButton = document.getElementById("finder-upload-zip");
+	const uploadInput = document.getElementById("finder-upload-input");
+	const status = document.getElementById("finder-status");
+	const previewTitle = document.getElementById("finder-preview-title");
+	const previewBody = document.getElementById("finder-preview-body");
+	const renameDialog = document.getElementById("finder-rename");
+	const renameTitle = document.getElementById("finder-rename-title");
+	const renameLabel = document.getElementById("finder-rename-label");
+	const renameName = document.getElementById("finder-rename-name");
+	const renameError = document.getElementById("finder-rename-error");
+	const renameCancel = document.getElementById("finder-rename-cancel");
+	const renameSubmit = document.getElementById("finder-rename-submit");
+	const expandedPaths = new Set(["/"]);
+	let selectedPath = null;
+	let activeDropTarget = null;
+	let refreshRequest = 0;
+	let previewRequest = 0;
+	let pendingUpload;
+	let uploading = false;
+	let renamePath;
+	let renaming = false;
+
+	if (
+		!finderList ||
+		!uploadInput ||
+		!uploadButton ||
+		!uploadZipButton ||
+		!status ||
+		!createFolderButton ||
+		!previewTitle ||
+		!previewBody
+	) {
+		return;
+	}
+
+	const escapeHtml = (value) =>
+		String(value)
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;");
+
+	const renderHighlighted = (text, languageHint) => {
+		if (window.hljs && typeof window.hljs.highlight === "function") {
+			try {
+				if (languageHint) {
+					return window.hljs.highlight(text, { language: languageHint }).value;
+				}
+				return window.hljs.highlightAuto(text).value;
+			} catch (error) {
+				return escapeHtml(text);
+			}
+		}
+		return escapeHtml(text);
+	};
+
+	const setStatus = (message, isError = false) => {
+		status.textContent = message;
+		status.dataset.error = String(isError);
+	};
+
+	const createRowAction = (action, title, iconName) => {
+		const button = document.createElement("button");
+		button.type = "button";
+		button.dataset.action = action;
+		button.draggable = false;
+		button.title = title;
+		button.setAttribute("aria-label", title);
+		const icon = document.createElement("img");
+		icon.alt = "";
+		icon.draggable = false;
+		icon.dataset.icon = action;
+		icon.src = `icons/${iconName}.svg`;
+		button.appendChild(icon);
+		return button;
+	};
+
+	const addWebsiteActions = (folder, actions) => {
+		const play = createVfsPreviewLink(folder);
+		if (!play) return;
+		actions.append(play, createRowAction("edit-index", "Edit index.html", "action-edit-pencil"));
+	};
+
+	const renderTree = (node, container) => {
+		const nodes = sortedVfsChildren(node);
+
+		nodes.forEach((child) => {
+			const isExpanded = expandedPaths.has(child.path);
+			const isFile = child.type === "file";
+			const isTable = isFile && Boolean(tableFileFormat(child.path));
+			const li = document.createElement("li");
+			li.dataset.path = child.path;
+			li.dataset.kind = child.type;
+
+			const row = document.createElement("div");
+			row.setAttribute("draggable", "true");
+			row.dataset.dragPath = child.path;
+			if (selectedPath === child.path) {
+				row.dataset.selected = "true";
+			}
+
+			if (child.type === "folder") {
+				const toggle = document.createElement("button");
+				toggle.type = "button";
+				toggle.dataset.action = "toggle";
+				toggle.setAttribute("draggable", "false");
+				toggle.setAttribute("aria-expanded", String(isExpanded));
+				toggle.setAttribute("aria-label", isExpanded ? "Collapse folder" : "Expand folder");
+				row.appendChild(toggle);
+				row.dataset.dropPath = child.path;
+			} else {
+				const spacer = document.createElement("span");
+				spacer.setAttribute("aria-hidden", "true");
+				spacer.dataset.role = "toggle-spacer";
+				row.appendChild(spacer);
+			}
+
+			const icon = document.createElement("img");
+			icon.alt = "";
+			icon.setAttribute("draggable", "false");
+			icon.dataset.icon = child.type;
+			const fileIcon = isTable ? "mime-x-office-spreadsheet" : "mime-text-x-generic";
+			icon.src = `icons/${isFile ? fileIcon : "place-folder"}.svg`;
+			row.appendChild(icon);
+
+			const name = document.createElement(isFile ? "button" : "span");
+			name.textContent = child.name;
+			name.dataset.role = "name";
+			if (isFile) {
+				name.type = "button";
+				name.dataset.action = "preview";
+				name.setAttribute("aria-controls", "finder-preview");
+				if (selectedPath === child.path) name.setAttribute("aria-current", "true");
+				const details = document.createElement("div");
+				details.dataset.role = "file-details";
+				const size = document.createElement("span");
+				size.dataset.role = "file-size";
+				details.append(name, size);
+				row.appendChild(details);
+			} else {
+				row.appendChild(name);
+			}
+
+			const actions = document.createElement("span");
+			actions.dataset.role = "actions";
+
+			if (isFile) {
+				const editTitle = isTable ? `Edit ${child.name} in Table` : `Edit ${child.name}`;
+				actions.appendChild(createRowAction("edit", editTitle, "action-edit-pencil"));
+			} else {
+				addWebsiteActions(child, actions);
+				const upload = createRowAction("upload", `Upload files to ${child.path}`, "action-go-up");
+				upload.disabled = uploading;
+				actions.appendChild(upload);
+			}
+
+			const isWorkspaceConfig = child.path === "/config.json";
+			if (!isWorkspaceConfig) {
+				actions.appendChild(createRowAction("rename", "Rename " + child.name, "action-insert-text"));
+			}
+			actions.appendChild(
+				createRowAction("download", isFile ? "Download file" : "Download folder as ZIP", "action-document-save-as")
+			);
+			if (!isWorkspaceConfig) actions.appendChild(createRowAction("delete", "Delete", "action-edit-delete"));
+
+			row.appendChild(actions);
+			li.appendChild(row);
+
+			if (child.type === "folder" && isExpanded) {
+				const nestedList = document.createElement("ul");
+				nestedList.dataset.dropPath = child.path;
+				renderTree(child, nestedList);
+				li.appendChild(nestedList);
+			}
+
+			container.appendChild(li);
+		});
+	};
+
+	const sizeUnits = ["B", "KiB", "MiB", "GiB", "TiB"];
+	const sizeNumber = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
+	const updateFileSize = async (vfs, label) => {
+		try {
+			const path = label.closest("li").dataset.path;
+			const { size } = await vfs.fileSystem.stat(path);
+			let value = size;
+			let unit = 0;
+			while (value >= 1024 && unit < sizeUnits.length - 1) {
+				value /= 1024;
+				unit++;
+			}
+			label.textContent = `${sizeNumber.format(value)} ${sizeUnits[unit]}`;
+			label.title = `${sizeNumber.format(size)} ${size === 1 ? "byte" : "bytes"}`;
+		} catch {
+			label.textContent = "—";
+			label.removeAttribute("title");
+		}
+	};
+
+	const loadVisibleFileSizes = async (vfs, request) => {
+		// Only read metadata for expanded rows, one file at a time for legacy binary entries.
+		for (const label of finderList.querySelectorAll('[data-role="file-size"]')) {
+			if (request !== refreshRequest) return;
+			await updateFileSize(vfs, label);
+		}
+	};
+
+	const refreshView = async (restore) => {
+		const request = ++refreshRequest;
+		const vfs = await window.vfsReady;
+		const entries = await vfs.ls("/");
+		if (request !== refreshRequest) return;
+
+		const tree = buildVfsTree(entries);
+		if (restore) {
+			if (Array.isArray(restore.expandedFolders)) {
+				expandedPaths.clear();
+				for (const path of restore.expandedFolders) {
+					if (typeof path !== "string") continue;
+					let node = tree;
+					for (const part of path.split("/").filter(Boolean)) node = node?.children.get(part);
+					if (node?.type === "folder" && node.path === path) expandedPaths.add(path);
+				}
+			}
+			if (typeof restore.selectedFile === "string" && restore.selectedFile.startsWith("/") &&
+				!restore.selectedFile.endsWith("/") && entries.includes(restore.selectedFile.slice(1))) {
+				selectedPath = restore.selectedFile;
+				updatePreview(selectedPath);
+			}
+		}
+		const isRootExpanded = expandedPaths.has("/");
+
+		const rootItem = document.createElement("li");
+		rootItem.dataset.path = "/";
+		rootItem.dataset.kind = "folder";
+		const rootRow = document.createElement("div");
+		rootRow.dataset.dropPath = "/";
+		rootRow.dataset.root = "true";
+
+		const rootToggle = document.createElement("button");
+		rootToggle.type = "button";
+		rootToggle.dataset.action = "toggle";
+		rootToggle.setAttribute("draggable", "false");
+		rootToggle.setAttribute("aria-expanded", String(isRootExpanded));
+		rootToggle.setAttribute("aria-label", isRootExpanded ? "Collapse folder" : "Expand folder");
+		rootRow.appendChild(rootToggle);
+
+		const rootIcon = document.createElement("img");
+		rootIcon.alt = "";
+		rootIcon.setAttribute("draggable", "false");
+		rootIcon.dataset.icon = "folder";
+		rootIcon.src = "icons/place-folder.svg";
+		rootRow.appendChild(rootIcon);
+
+		const rootName = document.createElement("span");
+		rootName.textContent = "/";
+		rootName.dataset.role = "name";
+		rootRow.appendChild(rootName);
+		const rootActions = document.createElement("span");
+		rootActions.dataset.role = "actions";
+		addWebsiteActions(tree, rootActions);
+		rootActions.appendChild(createRowAction("download", "Download folder as ZIP", "action-document-save-as"));
+		rootRow.appendChild(rootActions);
+
+		rootItem.appendChild(rootRow);
+
+		if (isRootExpanded) {
+			const nestedList = document.createElement("ul");
+			nestedList.dataset.dropPath = "/";
+			renderTree(tree, nestedList);
+			rootItem.appendChild(nestedList);
+		}
+
+		finderList.replaceChildren(rootItem);
+		finderEmpty.style.display = entries.length ? "none" : "block";
+		void loadVisibleFileSizes(vfs, request);
+	};
+
+	const previewPlaceholder = previewBody.firstElementChild;
+	const showPreviewPlaceholder = () => {
+		previewTitle.textContent = "Preview";
+		previewBody.replaceChildren(previewPlaceholder);
+	};
+
+	const extensionToLanguage = (name) => {
+		const match = name.toLowerCase().match(/\.([a-z0-9]+)$/);
+		if (!match) return null;
+		const ext = match[1];
+		const map = {
+			js: "javascript",
+			mjs: "javascript",
+			cjs: "javascript",
+			ts: "typescript",
+			jsx: "javascript",
+			tsx: "typescript",
+			json: "json",
+			md: "markdown",
+			txt: "plaintext",
+			html: "xml",
+			htm: "xml",
+			css: "css",
+			yml: "yaml",
+			yaml: "yaml",
+			sh: "bash",
+			bash: "bash",
+			py: "python",
+			rs: "rust",
+			go: "go",
+			java: "java",
+			c: "c",
+			h: "c",
+			cpp: "cpp",
+			hpp: "cpp"
+		};
+		return map[ext] || null;
+	};
+
+	const renderTablePreview = ({ columns, rows }, maxRows) => {
+		if (!columns.length) {
+			previewBody.textContent = rows.length ? "No fields to display." : "Empty table.";
+			return;
+		}
+		const table = document.createElement("table");
+		const visibleColumns = columns.slice(0, 12);
+		const limits = [];
+		if (rows.length > maxRows) limits.push(`Showing the first ${maxRows} rows`);
+		if (columns.length > visibleColumns.length) limits.push(`${visibleColumns.length} of ${columns.length} columns`);
+		if (!rows.length) limits.push("No data rows");
+		if (limits.length) table.createCaption().textContent = limits.join(" · ");
+		const header = table.createTHead().insertRow();
+		visibleColumns.forEach(({ name }, index) => {
+			const th = document.createElement("th");
+			th.scope = "col";
+			th.textContent = name || `Column ${index + 1}`;
+			header.append(th);
+		});
+		const body = table.createTBody();
+		for (const values of rows.slice(0, maxRows)) {
+			const row = body.insertRow();
+			visibleColumns.forEach((_, index) => {
+				row.insertCell().textContent = tableFormats.textValue(values[index]);
+			});
+		}
+		previewBody.replaceChildren(table);
+	};
+
+	const updatePreview = async (path) => {
+		const request = ++previewRequest;
+		const fileName = path.split("/").pop() || "";
+		previewTitle.textContent = fileName;
+		previewBody.textContent = "Loading preview…";
+		const current = () => request === previewRequest && path === selectedPath;
+
+		try {
+			const vfs = await window.vfsReady;
+			const format = tableFileFormat(path);
+			if (format) {
+				const maxRows = 25;
+				const bytes = await vfs.fileSystem.readBytes(path);
+				if (!current()) return;
+				const sheet = await tableFormats.read(format, bytes, maxRows + 1);
+				if (current()) renderTablePreview(sheet, maxRows);
+				return;
+			}
+			const contents = await vfs.getasync(path);
+			if (!current()) return;
+			if (typeof contents !== "string") {
+				previewBody.textContent = "Binary file. Download it to view its contents.";
+				return;
+			}
+			const languageHint = extensionToLanguage(fileName);
+			const highlighted = renderHighlighted(contents, languageHint);
+			const languageClass = languageHint ? ` language-${languageHint}` : "";
+			previewBody.innerHTML = `<pre><code class="hljs${languageClass}">${highlighted}</code></pre>`;
+		} catch (error) {
+			if (current()) previewBody.textContent = `Unable to load file preview. ${error.message || error}`;
+		}
+	};
+
+	const selectFile = (row, path) => {
+		finderList.querySelector('[data-selected="true"]')?.removeAttribute("data-selected");
+		finderList.querySelector('[aria-current="true"]')?.removeAttribute("aria-current");
+		selectedPath = path;
+		pageSettings.save("explorer", { selectedFile: path });
+		row.dataset.selected = "true";
+		row.querySelector('[data-role="name"]').setAttribute("aria-current", "true");
+		updatePreview(path);
+	};
+
+	function updateMovedPaths(source, target) {
+		if (source === target) return;
+		const isFolder = source.endsWith("/");
+		const changes = {};
+		const movedFolders = isFolder ? [...expandedPaths].filter(folder => folder.startsWith(source)) : [];
+		for (const folder of movedFolders) {
+			expandedPaths.delete(folder);
+			expandedPaths.add(target + folder.slice(source.length));
+		}
+		if (movedFolders.length) changes.expandedFolders = [...expandedPaths];
+		if (selectedPath === source || (isFolder && selectedPath?.startsWith(source))) {
+			selectedPath = target + selectedPath.slice(source.length);
+			changes.selectedFile = selectedPath;
+			updatePreview(selectedPath);
+		}
+		if (![source, target].includes("/config.json") && Object.keys(changes).length) {
+			return pageSettings.save("explorer", changes);
+		}
+	}
+
+	const openEditor = createVfsEditor({
+		onStatus: setStatus,
+		async onSaved(path) {
+			if (selectedPath === path) updatePreview(path);
+			const label = finderList.querySelector(`li[data-path="${CSS.escape(path)}"] [data-role="file-size"]`);
+			if (label) await updateFileSize(await window.vfsReady, label);
+		}
+	});
+
+	renameCancel.addEventListener("click", () => renameDialog.close());
+	renameDialog.addEventListener("cancel", event => { if (renaming) event.preventDefault(); });
+	renameDialog.querySelector("form").addEventListener("submit", async event => {
+		event.preventDefault();
+		if (renaming || !renameDialog.open) return;
+		const path = renamePath;
+		const isFolder = path.endsWith("/");
+		const kind = isFolder ? "folder" : "file";
+		const entry = isFolder ? path.slice(0, -1) : path;
+		const name = renameName.value;
+		renameError.textContent = "";
+		if (!name.trim() || name === "." || name === ".." || /[/\\\x00-\x1f\x7f]/.test(name)) {
+			renameError.textContent = "Enter a valid " + kind + " name without a path.";
+			renameName.focus();
+			return;
+		}
+		const target = entry.slice(0, entry.lastIndexOf("/") + 1) + name + (isFolder ? "/" : "");
+		if (target === path) {
+			renameDialog.close();
+			return;
+		}
+		renaming = renameName.readOnly = renameCancel.disabled = renameSubmit.disabled = true;
+		try {
+			const vfs = await window.vfsReady;
+			await vfs.fileSystem.mv(path, target, { overwrite: false });
+		} catch (error) {
+			const collision = ["EEXIST", "EISDIR", "ENOTDIR"].includes(error?.code);
+			renameError.textContent = collision ? "That name is already in use in this folder."
+				: error?.message || "Unable to rename the " + kind + ".";
+			renameName.focus();
+			return;
+		} finally {
+			renaming = renameName.readOnly = renameCancel.disabled = renameSubmit.disabled = false;
+		}
+		renameDialog.close();
+		await updateMovedPaths(path, target);
+		setStatus("Renamed to " + name + ".");
+		try {
+			await refreshView();
+			if (document.activeElement === document.body) {
+				const control = isFolder ? '[data-action="toggle"]' : '[data-role="name"]';
+				finderList.querySelector(`li[data-path="${CSS.escape(target)}"] > div > ${control}`)?.focus();
+			}
+		} catch (error) {
+			setStatus("Renamed to " + name + ". Unable to refresh the file list. " + (error?.message || error), true);
+		}
+	});
+
+	createFolderButton.addEventListener("click", async () => {
+		const name = window.prompt("Folder name");
+		if (!name) return;
+		const trimmed = name.trim().replace(/^\/+|\/+$/g, "");
+		if (!trimmed || trimmed.includes("/")) {
+			window.alert("Folder name must be a single segment.");
+			return;
+		}
+		try {
+			const vfs = await window.vfsReady;
+			expandedPaths.add(await vfs.mkdir(`/${trimmed}/`));
+			pageSettings.save("explorer", { expandedFolders: [...expandedPaths] });
+			await refreshView();
+		} catch (error) {
+			setStatus(`Unable to create folder: ${error?.message || error}`, true);
+		}
+	});
+
+	function chooseUpload(folder, button, zipOnly = false) {
+		if (uploading) return;
+		pendingUpload = { folder, button, zipOnly };
+		uploadInput.value = "";
+		uploadInput.multiple = !zipOnly;
+		if (zipOnly) uploadInput.accept = ".zip,application/zip,application/x-zip-compressed";
+		else uploadInput.removeAttribute("accept");
+		uploadInput.click();
+	}
+
+	uploadButton.addEventListener("click", () => chooseUpload("/", uploadButton));
+	uploadZipButton.addEventListener("click", () => chooseUpload("/", uploadZipButton, true));
+
+	uploadInput.addEventListener("change", async (event) => {
+		const files = Array.from(event.target.files);
+		if (!files.length || !pendingUpload || uploading) return;
+		const { folder, button, zipOnly } = pendingUpload;
+		pendingUpload = undefined;
+		const fromFolderRow = button.dataset.action === "upload";
+		uploading = uploadButton.disabled = uploadZipButton.disabled = true;
+		for (const action of finderList.querySelectorAll('[data-action="upload"]')) action.disabled = true;
+		const failures = [];
+		let uploaded = 0;
+		let lastImport;
+		try {
+			const vfs = await window.vfsReady;
+			for (const file of files) {
+				try {
+					// The toolbar supports ZIP extraction. A folder upload stores the selected files as they are.
+					if (zipOnly || (!fromFolderRow && /\.zip$/i.test(file.name))) {
+						setStatus(`Extracting ${file.name}…`);
+						lastImport = await vfsZip.importFolder(vfs, file);
+						expandedPaths.add(vfs.parentDir(lastImport.slice(0, -1)));
+						expandedPaths.add(lastImport);
+					} else {
+						setStatus(`Uploading ${file.name} to ${folder}…`);
+						if (!file.name || file.name === "." || file.name === ".." || /[/\\\x00-\x1f\x7f]/.test(file.name)) {
+							throw new Error("Invalid file name.");
+						}
+						const path = folder + file.name;
+						await vfs.fileSystem.write(path, new Uint8Array(await file.arrayBuffer()));
+						if (selectedPath === path) updatePreview(path);
+					}
+					uploaded++;
+				} catch (error) {
+					failures.push(`${file.name}: ${error?.message || error}`);
+				}
+			}
+			if (uploaded) {
+				expandedPaths.add(folder);
+				pageSettings.save("explorer", { expandedFolders: [...expandedPaths] });
+				await refreshView();
+			}
+			if (failures.length) setStatus(`Uploaded ${uploaded} of ${files.length}. ${failures.join(" · ")}`, true);
+			else if (lastImport && files.length === 1) setStatus(`Extracted to ${lastImport}`);
+			else if (lastImport) setStatus(`Uploaded ${uploaded} files.`);
+			else setStatus(`Uploaded ${uploaded} ${uploaded === 1 ? "file" : "files"} to ${folder}.`);
+		} catch (error) {
+			setStatus(`Upload failed: ${error?.message || error || "Unknown error."}`, true);
+		} finally {
+			uploadInput.value = "";
+			uploading = uploadButton.disabled = uploadZipButton.disabled = false;
+			for (const action of finderList.querySelectorAll('[data-action="upload"]')) action.disabled = false;
+			if (document.activeElement === document.body || document.activeElement === uploadInput) {
+				const target = fromFolderRow
+					? finderList.querySelector(`li[data-path="${CSS.escape(folder)}"] > div [data-action="upload"]`)
+					: button;
+				target?.focus();
+			}
+		}
+	});
+
+	finderList.addEventListener("click", async (event) => {
+		const row = event.target.closest("li > div");
+		if (!row) return;
+		const item = row.parentElement;
+		const path = item.dataset.path;
+		const button = event.target.closest("button[data-action]");
+		const action = button?.dataset.action;
+		if (event.target.closest("a")) return;
+
+		if (!action || action === "preview") {
+			if (item.dataset.kind === "file" && !event.target.closest('[data-role="actions"]')) selectFile(row, path);
+			return;
+		}
+
+		if (action === "upload") {
+			chooseUpload(path, button);
+			return;
+		}
+
+		if (action === "edit-index") {
+			await openEditor(`${path}index.html`);
+			return;
+		}
+
+		if (action === "edit") {
+			const url = tableEditorUrl(path);
+			if (url) {
+				window.location.assign(url);
+			} else {
+				selectFile(row, path);
+				await openEditor(path);
+			}
+			return;
+		}
+
+		if (action === "rename") {
+			renamePath = path;
+			const isFolder = item.dataset.kind === "folder";
+			const entry = isFolder ? path.slice(0, -1) : path;
+			renameTitle.textContent = isFolder ? "Rename folder" : "Rename file";
+			renameLabel.textContent = isFolder ? "Folder name" : "File name";
+			renameError.textContent = "";
+			renameName.value = entry.slice(entry.lastIndexOf("/") + 1);
+			renameDialog.showModal();
+			const extension = renameName.value.lastIndexOf(".");
+			renameName.setSelectionRange(0, !isFolder && extension > 0 ? extension : renameName.value.length);
+			return;
+		}
+
+		const vfs = await window.vfsReady;
+
+		if (action === "toggle") {
+			if (expandedPaths.has(path)) {
+				expandedPaths.delete(path);
+			} else {
+				expandedPaths.add(path);
+			}
+			pageSettings.save("explorer", { expandedFolders: [...expandedPaths] });
+			await refreshView();
+			if (document.activeElement === document.body) {
+				finderList.querySelector(`li[data-path="${CSS.escape(path)}"] > div > [data-action="toggle"]`)?.focus();
+			}
+			return;
+		}
+
+		if (action === "delete") {
+			if (item.dataset.kind === "folder" && !window.confirm(`Delete ${path} and all its contents?`)) return;
+			try {
+				await vfs.deleteTree(path);
+			} catch (error) {
+				setStatus(`Unable to delete entry: ${error?.message || error}`, true);
+				return;
+			}
+			const changes = {};
+			if (path.endsWith("/")) {
+				const count = expandedPaths.size;
+				for (const folder of expandedPaths) if (folder.startsWith(path)) expandedPaths.delete(folder);
+				if (count !== expandedPaths.size) changes.expandedFolders = [...expandedPaths];
+			}
+			if (selectedPath === path || (path.endsWith("/") && selectedPath?.startsWith(path))) {
+				selectedPath = null;
+				changes.selectedFile = null;
+				showPreviewPlaceholder();
+			}
+			if (path !== "/config.json" && Object.keys(changes).length) pageSettings.save("explorer", changes);
+			await refreshView();
+			return;
+		}
+
+		if (action === "download") {
+			button.disabled = true;
+			try {
+				if (path.endsWith("/")) {
+					setStatus(`Creating ZIP for ${path}…`);
+					const { name, blob } = await vfsZip.exportFolder(vfs, path);
+					downloadVfsBlob(blob, name);
+					setStatus(`ZIP ready: ${name}`);
+				} else {
+					await downloadVfsFile(vfs, path);
+				}
+			} catch (error) {
+				setStatus(`Download failed: ${error?.message || error || "Unknown error."}`, true);
+			} finally {
+				button.disabled = false;
+			}
+		}
+	});
+
+	finderList.addEventListener("dragstart", (event) => {
+		const row = event.target.closest("[data-drag-path]");
+		if (!row) return;
+		if (event.target.closest("[data-role=\"actions\"], button, img, [data-action=\"toggle\"]")) {
+			event.preventDefault();
+			return;
+		}
+		event.dataTransfer.setData("text/plain", row.dataset.dragPath);
+		event.dataTransfer.effectAllowed = "move";
+		row.dataset.dragging = "true";
+	});
+
+	finderList.addEventListener("dragend", (event) => {
+		const row = event.target.closest("[data-drag-path]");
+		if (row) {
+			delete row.dataset.dragging;
+		}
+		if (activeDropTarget) {
+			delete activeDropTarget.dataset.dropTarget;
+			activeDropTarget = null;
+		}
+	});
+
+	finderList.addEventListener("dragover", (event) => {
+		const target = event.target.closest("[data-drop-path]");
+		if (!target) return;
+		event.preventDefault();
+		event.dataTransfer.dropEffect = "move";
+		if (activeDropTarget && activeDropTarget !== target) {
+			delete activeDropTarget.dataset.dropTarget;
+		}
+		activeDropTarget = target;
+		activeDropTarget.dataset.dropTarget = "true";
+	});
+
+	finderList.addEventListener("dragleave", (event) => {
+		const target = event.target.closest("[data-drop-path]");
+		if (!target || !activeDropTarget) return;
+		if (target === activeDropTarget) {
+			delete activeDropTarget.dataset.dropTarget;
+			activeDropTarget = null;
+		}
+	});
+
+	finderList.addEventListener("drop", async (event) => {
+		const target = event.target.closest("[data-drop-path]");
+		if (!target) return;
+		event.preventDefault();
+		const srcPath = event.dataTransfer.getData("text/plain");
+		const destDir = target.dataset.dropPath || "/";
+		if (!srcPath || !destDir) return;
+		const vfs = await window.vfsReady;
+		try {
+			const destPath = await vfs.moveTree(srcPath, destDir);
+			await updateMovedPaths(srcPath, destPath);
+		} catch (error) {
+			if (error instanceof Error && error.message) {
+				window.alert(error.message);
+			} else {
+				window.alert("Unable to move entry.");
+			}
+		}
+		if (activeDropTarget) {
+			delete activeDropTarget.dataset.dropTarget;
+			activeDropTarget = null;
+		}
+		await refreshView();
+	});
+
+	pageSettings.read("explorer").then(refreshView).catch(error => setStatus(`Unable to list files: ${error?.message || error}`, true));
+			});
+		</script>
+	</body>
+</html>

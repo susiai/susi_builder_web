@@ -16,7 +16,7 @@ function parseWorkstationState(source) {
 			task.prompt.length > 50000 || !statuses.includes(task.status) ||
 			(task.archived !== undefined && typeof task.archived !== "boolean") || !task.title.trim() || !task.prompt.trim() ||
 			(task.dependsOn !== undefined && (!Array.isArray(task.dependsOn) || task.dependsOn.length > 20 || !task.dependsOn.every(id)))) {
-			throw new Error("Invalid saved task. Repair the workspace record before continuing.");
+			throw new Error("Invalid saved task. Repair the workspace record in Code Studio.");
 		}
 		ids.add(task.id);
 	}

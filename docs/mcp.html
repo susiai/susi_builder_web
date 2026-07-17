@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>SUSI Builder MCP connectors</title>
+		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
+		<link rel="stylesheet" href="css/mcp.css?v=15afc971" />
+		<script defer src="js/vfs.js?v=6a2f831b"></script>
+		<script defer src="js/llm-client.js?v=723c3b96"></script>
+		<script defer src="js/skills.js?v=c42ccf4f"></script>
+		<script defer src="js/file-search.js?v=80072ff5"></script>
+		<script defer src="js/webfetch.js?v=c50d56e3"></script>
+		<script defer src="js/llm.js?v=5eb60f13"></script>
+		<script defer src="js/mcp.js?v=1a56a667"></script>
+		<script defer src="js/mcp-settings.js?v=d7a6024b"></script>
+		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+	</head>
+	<body id="mcp-page">
+		<iframe id="site-menu" title="Pages" src="navigation.html#mcp"></iframe>
+		<header>
+			<h1>MCP connectors</h1>
+			<p>Connect a Model Context Protocol server and choose which of its functions your agents can use.</p>
+		</header>
+		<div id="layout">
+			<main>
+				<section aria-labelledby="mcp-form-title">
+					<h2 id="mcp-form-title">Add a server</h2>
+					<div id="mcp-setup" inert>
+						<div id="mcp-create-options">
+							<p>Enter your own server below or choose a suggestion to fill in its name and endpoint.</p>
+							<details id="mcp-suggestions">
+								<summary>Browse suggested servers</summary>
+								<form id="mcp-pack-search" role="search" aria-label="Pipeworx pack catalog">
+									<label for="mcp-pack-query">Search Pipeworx packs</label>
+									<div class="mcp-search-controls">
+										<input id="mcp-pack-query" type="search" required maxlength="240"
+											placeholder="Try weather, icons or open data" aria-describedby="mcp-pack-help" />
+										<button type="submit">Search</button>
+										<button type="button" id="mcp-pack-clear" hidden>Clear search</button>
+									</div>
+									<p id="mcp-pack-help">Find servers you can use without an account or API key, within the daily free allowance.
+										<a href="https://pipeworx.io/packs/" target="_blank" rel="noopener">Pipeworx catalog ↗</a></p>
+								</form>
+								<p id="mcp-pack-status" role="status"></p>
+								<ul id="mcp-pack-results" aria-label="Free-tier search results" hidden></ul>
+								<button id="mcp-pack-more" type="button" hidden>Show more results</button>
+								<div id="mcp-featured">
+									<h3 id="mcp-featured-title">Featured servers</h3>
+									<p id="mcp-file-help" hidden>Opening SUSI Builder from disk? Try MDN or DeepWiki directly.
+										For Internet Archive, Hugging Face and Open-Meteo, open SUSI Builder on localhost.</p>
+									<ul aria-labelledby="mcp-featured-title">
+										<li>
+											<h4>MDN Web Docs</h4>
+											<p>Look up HTML, CSS and JavaScript features and check which browsers support them.</p>
+											<code>https://mcp.mdn.mozilla.net/</code>
+											<div>
+												<button type="button" aria-label="Use MDN Web Docs">Use server</button>
+												<a href="https://developer.mozilla.org/en-US/mcp" target="_blank" rel="noopener" aria-label="MDN Web Docs documentation">Docs ↗</a>
+											</div>
+										</li>
+										<li>
+											<h4>DeepWiki</h4>
+											<p>Explore the docs for a public GitHub repository and ask how its code works.</p>
+											<code>https://mcp.deepwiki.com/mcp</code>
+											<div>
+												<button type="button" aria-label="Use DeepWiki">Use server</button>
+												<a href="https://docs.devin.ai/work-with-devin/deepwiki-mcp" target="_blank" rel="noopener" aria-label="DeepWiki documentation">Docs ↗</a>
+											</div>
+										</li>
+										<li>
+											<h4>Internet Archive</h4>
+											<p>Find earlier versions of a website in the Wayback Machine or read items from the archive.</p>
+											<code>https://internet-archive.caseyjhand.com/mcp</code>
+											<div>
+												<button type="button" aria-label="Use Internet Archive">Use server</button>
+												<a href="https://internet-archive.caseyjhand.com/" target="_blank" rel="noopener" aria-label="Internet Archive documentation">Docs ↗</a>
+											</div>
+										</li>
+										<li>
+											<h4>Mint</h4>
+											<p>Generate 3D models, worlds and asset packs using Mint OAuth and credits.
+												Mint blocks connections from local SUSI Builder pages.</p>
+											<code>https://mcp.mint.gg/mcp</code>
+											<div>
+												<button type="button" aria-label="Use Mint">Use server</button>
+												<a href="https://mcp.mint.gg/" target="_blank" rel="noopener" aria-label="Mint documentation">Docs ↗</a>
+											</div>
+										</li>
+										<li>
+											<h4>Hugging Face</h4>
+											<p>Find models, datasets, papers and Spaces on the Hub, or search the Hugging Face docs.</p>
+											<code>https://huggingface.co/mcp</code>
+											<div>
+												<button type="button" aria-label="Use Hugging Face">Use server</button>
+												<a href="https://huggingface.co/docs/hub/agents-mcp" target="_blank" rel="noopener" aria-label="Hugging Face documentation">Docs ↗</a>
+											</div>
+										</li>
+										<li>
+											<h4>Iconify</h4>
+											<p>Search icon collections by keyword and retrieve SVGs for your interface.</p>
+											<code>https://gateway.pipeworx.io/iconify/mcp</code>
+											<div>
+												<button type="button" aria-label="Use Iconify">Use server</button>
+												<a href="https://pipeworx.io/packs/iconify/" target="_blank" rel="noopener" aria-label="Iconify documentation">Docs ↗</a>
+											</div>
+										</li>
+										<li>
+											<h4>Open-Meteo</h4>
+											<p>Look up a place and explore its forecast, historical weather and air quality.</p>
+											<code>https://open-meteo.caseyjhand.com/mcp</code>
+											<div>
+												<button type="button" aria-label="Use Open-Meteo">Use server</button>
+												<a href="https://open-meteo.caseyjhand.com/" target="_blank" rel="noopener" aria-label="Open-Meteo documentation">Docs ↗</a>
+											</div>
+										</li>
+										<li>
+											<h4>Pipeworx Science</h4>
+											<p>Track the space station, look up recent earthquakes or fetch NASA’s astronomy picture of the day.</p>
+											<code>https://gateway.pipeworx.io/science/mcp</code>
+											<div>
+												<button type="button" aria-label="Use Pipeworx Science">Use server</button>
+												<a href="https://pipeworx.io/packs/science/" target="_blank" rel="noopener" aria-label="Pipeworx Science documentation">Docs ↗</a>
+											</div>
+										</li>
+									</ul>
+								</div>
+							</details>
+						</div>
+						<form id="mcp-server-form">
+							<div class="mcp-fields">
+								<label>Server name <input name="name" required maxlength="120" placeholder="Project tools" /></label>
+								<label>Endpoint URL <input name="url" type="url" required spellcheck="false"
+									placeholder="https://example.org/mcp" aria-describedby="mcp-endpoint-help" /></label>
+							</div>
+							<p id="mcp-endpoint-help">Use a Streamable HTTP endpoint that accepts requests from this browser origin.</p>
+							<details id="mcp-auth">
+								<summary>Authentication</summary>
+								<label>Bearer token (optional) <input name="token" type="password" autocomplete="off"
+									aria-describedby="mcp-token-help" /></label>
+								<p id="mcp-token-help">Stored for this browser tab. Use HTTPS or a loopback endpoint.</p>
+								<label id="mcp-forget" hidden><input type="checkbox" name="forget" /> Forget saved token</label>
+							</details>
+							<p id="mcp-edit-help" hidden>Changing the endpoint clears this connector’s tool selection.</p>
+							<div class="mcp-actions">
+								<button type="submit">Add server</button>
+								<button type="button" id="mcp-cancel" hidden>Cancel edit</button>
+							</div>
+						</form>
+					</div>
+					<p id="mcp-status" data-vfs-open-status role="status">Opening settings…</p>
+				</section>
+				<section aria-labelledby="mcp-connectors-title">
+					<h2 id="mcp-connectors-title">Connectors</h2>
+					<p>Each server contributes the functions you select. New functions start unchecked.</p>
+					<div id="mcp-connectors"></div>
+				</section>
+			</main>
+		</div>
+		<template id="mcp-pack-card">
+			<li>
+				<h4></h4>
+				<p></p>
+				<code></code>
+				<div>
+					<button type="button">Use server</button>
+					<a target="_blank" rel="noopener">Docs ↗</a>
+				</div>
+			</li>
+		</template>
+		<template id="mcp-card">
+			<article>
+				<h3></h3>
+				<p class="mcp-url"></p>
+				<div class="mcp-actions">
+					<button type="button" data-action="refresh">Refresh tools</button>
+					<button type="button" data-action="edit">Edit server</button>
+					<button type="button" data-action="remove">Remove server</button>
+				</div>
+				<fieldset>
+					<legend></legend>
+					<label class="mcp-master"><input type="checkbox" data-action="all" /> Select all tools</label>
+					<div class="mcp-tools"></div>
+				</fieldset>
+				<p class="mcp-notice" role="status"></p>
+			</article>
+		</template>
+	</body>
+</html>

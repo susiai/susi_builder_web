@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>SUSI Builder Table</title>
+		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
+		<link rel="stylesheet" href="css/table.css?v=305e80ff" />
+		<script defer src="js/vfs.js?v=6a2f831b"></script>
+		<script defer src="js/page-settings.js?v=60de7c53"></script>
+		<script defer src="js/vfs-browser.js?v=f36d53fe"></script>
+		<script defer src="js/vendor/lossless-json-4.3.3.min.js?v=0fa78b94"></script>
+		<script defer src="js/vendor/hyparquet-1.32.0.min.js?v=f5167313"></script>
+		<script defer src="js/table-formats.js?v=a35963de"></script>
+		<script defer src="js/table.js?v=6f81d910"></script>
+		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+	</head>
+	<body id="table-page">
+		<iframe id="site-menu" title="Pages" src="navigation.html#table"></iframe>
+		<main id="table-workspace">
+			<header id="table-heading">
+				<hgroup>
+					<h1>Table</h1>
+					<p>Create and edit tables in CSV (.csv), JSON Lines (.jsonl), or Apache Parquet (.parquet) format.</p>
+				</hgroup>
+				<nav aria-label="Table files">
+					<button type="button" id="new-table">New</button>
+					<button type="button" id="open-table">Open…</button>
+					<button type="button" id="save-table">Save</button>
+					<button type="button" id="save-as">Save as…</button>
+				</nav>
+			</header>
+			<div id="sheet">
+				<div id="sheet-title"><span class="sheet-icon" aria-hidden="true"></span>
+					<strong id="file-name">Untitled.csv</strong><span id="file-location">New table</span></div>
+				<div id="sheet-tools" role="group" aria-label="Edit table">
+					<button type="button" id="undo" title="Undo (Ctrl or Command + Z)">Undo</button>
+					<button type="button" id="redo" title="Redo">Redo</button>
+					<button type="button" id="add-row">+ Row</button>
+					<button type="button" id="add-column">+ Column</button>
+					<button type="button" id="rename-column">Rename column</button>
+					<button type="button" id="remove-row">Delete row</button>
+					<button type="button" id="remove-column">Delete column</button>
+				</div>
+				<div id="cell-bar" role="group" aria-label="Selected cell">
+					<output id="cell-address" aria-label="Cell address">A1</output>
+					<select id="cell-type" aria-label="Cell value type"></select>
+					<textarea id="cell-value" rows="1" aria-label="Cell value" aria-describedby="table-status" spellcheck="false"></textarea>
+					<button type="button" id="apply-cell" title="Apply cell value (Enter)">Apply</button>
+				</div>
+				<div id="grid-scroll">
+					<table id="data-grid" aria-label="Table data" aria-describedby="table-help"><thead></thead><tbody></tbody></table>
+					<button type="button" id="append-row">+ Add row</button>
+				</div>
+				<footer id="sheet-footer"><span id="dimensions"></span>
+					<nav aria-label="Table rows">
+						<button type="button" id="previous-page" aria-label="Previous page"
+							title="Previous page. Hold a dragged row here to turn the page.">←</button>
+						<span id="page-range"></span>
+						<button type="button" id="next-page" aria-label="Next page"
+							title="Next page. Hold a dragged row here to turn the page.">→</button>
+					</nav>
+				</footer>
+			</div>
+			<div id="table-drop-line" aria-hidden="true" hidden></div>
+			<p id="table-help">Double-click a cell to edit. Drag a column header or row number to move it.
+				From a selected cell, Alt + ←/→ moves its column and Alt + ↑/↓ moves its row.</p>
+			<p id="table-status" role="status"></p>
+		</main>
+		<dialog id="open-dialog" aria-labelledby="open-title">
+			<h2 id="open-title">Open table</h2>
+			<form id="open-form">
+				<label for="workspace-files">Workspace files</label>
+				<select id="workspace-files" size="7" required></select>
+				<p class="dialog-status" role="status"></p>
+				<div class="dialog-actions">
+					<button type="button" id="open-local">From computer…</button>
+					<button type="button" data-close>Cancel</button><button type="submit" id="open-workspace">Open</button>
+				</div>
+			</form>
+		</dialog>
+		<input id="local-file" type="file" accept=".csv,.jsonl,.parquet" hidden />
+		<dialog id="save-dialog" aria-labelledby="save-title">
+			<h2 id="save-title">Save table as</h2>
+			<form id="save-form">
+				<label for="save-destination">Destination</label>
+				<select id="save-destination"><option value="vfs">Workspace</option><option value="local">Computer</option></select>
+				<label for="save-name">File name</label>
+				<input id="save-name" required autocomplete="off" spellcheck="false" />
+				<label for="save-format">File format</label>
+				<select id="save-format"><option value="csv">CSV</option><option value="jsonl">JSON Lines</option>
+					<option value="parquet">Apache Parquet</option></select>
+				<p id="format-note"></p><p class="dialog-status" role="status"></p>
+				<div class="dialog-actions"><button type="button" data-close>Cancel</button><button type="submit">Save</button></div>
+			</form>
+		</dialog>
+		<dialog id="column-dialog" aria-labelledby="column-title">
+			<h2 id="column-title">Add column</h2>
+			<form id="column-form">
+				<label for="column-name">Column name</label><input id="column-name" autocomplete="off" />
+				<label for="column-type">Data type</label>
+				<select id="column-type"><option>Text</option><option>Integer</option><option>Number</option><option>Boolean</option></select>
+				<p class="dialog-status" role="status"></p>
+				<div class="dialog-actions"><button type="button" data-close>Cancel</button><button type="submit">Apply</button></div>
+			</form>
+		</dialog>
+	</body>
+</html>
