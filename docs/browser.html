@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>SUSI Builder Browser</title>
+		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+		<script defer src="js/vfs.js?v=6a2f831b"></script>
+		<script defer src="js/page-settings.js?v=60de7c53"></script>
+		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
+		<link rel="stylesheet" href="css/workspace.css?v=c12c1be8" />
+		<link rel="stylesheet" href="css/browser.css?v=e27ce6df" />
+		<script defer src="js/browser-hub.js?v=8e84d285"></script>
+		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+	</head>
+	<body id="browser-page">
+		<iframe id="site-menu" title="Pages" src="navigation.html#browser"></iframe>
+		<header><h1>Browser</h1>
+			<p>Connect a compatible browser tab to let Chat work in it. Chat can read the content the app shares
+				and, with your approval, click buttons, fill in fields, and select options.</p>
+		</header>
+		<main id="browser-main">
+			<div class="browser-connection-bar"><p id="browser-connection" role="status">Nothing shared</p>
+				<button id="browser-disconnect" type="button" disabled>Disconnect all</button></div>
+			<p id="browser-status" data-vfs-open-status role="status"></p>
+			<section id="browser-incoming" class="browser-panel" hidden aria-labelledby="browser-offer-title">
+				<h2 id="browser-offer-title">Connect this app?</h2><p id="browser-incoming-name"></p>
+				<div class="workspace-actions"><button type="button" id="browser-accept">Connect app</button>
+					<button type="button" id="browser-decline">Decline</button></div>
+			</section>
+			<div class="workspace-columns">
+				<section class="browser-panel" aria-labelledby="browser-capture-title">
+					<h2 id="browser-capture-title">Share a tab image</h2>
+					<p>Choose an open tab to capture a single screenshot. Review it, then share it with Chat
+						to ask your vision model about what was visible in that frame.</p>
+					<button id="browser-capture" type="button">Choose a browser tab</button>
+					<p id="browser-capture-status" role="status"></p>
+					<div id="browser-capture-draft" hidden>
+						<img id="browser-capture-image" alt="Tab image awaiting review" />
+						<div class="workspace-actions"><button id="browser-publish" type="button">Share image with Chat</button>
+							<button id="browser-discard" type="button">Discard</button></div>
+					</div>
+				</section>
+				<section class="browser-panel" aria-labelledby="browser-connect-title">
+					<h2 id="browser-connect-title">Connect an interactive app</h2>
+					<p>In the app tab, select <strong>Read and request actions</strong> for interactive tasks
+						or <strong>Read only</strong> for questions about the page. Then choose
+						<strong>Share with SUSI Builder</strong>.</p>
+					<form id="browser-app-form"><label for="browser-app-url">App URL</label>
+						<input id="browser-app-url" type="url" placeholder="https://…" required />
+						<div class="workspace-actions"><button type="submit">Open app tab</button>
+							<button id="browser-practice-start" type="button">Open practice tab</button></div>
+					</form>
+					<p><a id="browser-chat" href="chat.html" target="_blank" rel="noopener">Open Chat ↗</a>
+						and select <strong>Browser operator</strong>. With the practice tab connected, try asking Chat
+						to mark the mobile navigation check as complete.</p>
+					<details><summary>Connect your own app</summary>
+						<p>Add the sharing script and mark the content and controls your app offers.
+							A tab that is already open can also start its connection from its share button.</p>
+						<p><a href="../README.md#browser-connections">App integration example</a></p>
+					</details>
+				</section>
+			</div>
+			<section id="browser-approvals" class="browser-panel" aria-labelledby="browser-approvals-title">
+				<header><h2 id="browser-approvals-title">Action approvals</h2><span id="browser-pending-count">0 pending</span></header>
+				<p id="browser-approval-empty">Keep this Browser page open while you use Chat.
+					Each requested action appears here for you to approve or deny.</p>
+				<div id="browser-pending" aria-live="polite"></div>
+			</section>
+			<div class="workspace-columns">
+				<section class="browser-panel" aria-labelledby="browser-targets-title">
+					<h2 id="browser-targets-title">Shared tabs and images</h2>
+					<p id="browser-target-empty">Your shared tabs and images appear here.</p>
+					<ul id="browser-targets"></ul>
+				</section>
+				<section class="browser-panel" aria-labelledby="browser-observation-title">
+					<header><h2 id="browser-observation-title">Latest observation</h2><span class="workspace-status">Page data</span></header>
+					<p id="browser-observation-empty">Read a shared surface to see what the agent receives.</p>
+					<div id="browser-observation" hidden>
+						<p id="browser-observation-title-text"></p><pre id="browser-page-text"></pre>
+						<img id="browser-observed-image" alt="Shared tab image" hidden />
+						<div id="browser-observation-actions" hidden>
+							<label for="browser-element">Element</label><select id="browser-element"></select>
+							<label for="browser-value">Text or option value</label>
+							<input id="browser-value" maxlength="8000" autocomplete="off" />
+							<div class="workspace-actions"><button id="browser-click" type="button">Request click</button>
+								<button id="browser-fill" type="button">Request input</button></div>
+						</div>
+					</div>
+				</section>
+			</div>
+		</main>
+	</body>
+</html>

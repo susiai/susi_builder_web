@@ -4,7 +4,7 @@ globalThis.llmLocal = (() => {
 	const root = "/Models/Chat/";
 	const contextLimit = 8192;
 	const defaultConfig = {
-		chatProvider: "browser", chatLocalPrimary: "qwen3-0.6b-webgpu", chatLocalFallback: "qwen3-0.6b-wasm", thinking: false
+		chatProvider: "browser", chatLocalPrimary: "lfm3-1.7b-webgpu", chatLocalFallback: "lfm2.5-350m-wasm", thinking: false
 	};
 	const metadata = [
 		["generation_config.json", 219, "9e9e031ae8bca36eefcdcdd0b35d83c61baa01e31d68d5f5a961c9ca1a4b95bf"],

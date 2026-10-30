@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>SUSI Builder Skill Creator</title>
+		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
+		<link rel="stylesheet" href="css/skill-creator.css?v=189da736" />
+		<script defer src="js/vfs.js?v=6a2f831b"></script>
+		<script defer src="js/page-settings.js?v=60de7c53"></script>
+		<script defer src="js/skills.js?v=c42ccf4f"></script>
+		<script defer src="js/webfetch.js?v=c50d56e3"></script>
+		<script defer src="js/llm-client.js?v=723c3b96"></script>
+		<script defer src="js/llm.js?v=93abf4ae"></script>
+		<script defer src="js/transformer-model-assets.js?v=9de616b6"></script>
+		<script defer src="js/llm-local.js?v=e3b0a92d"></script>
+		<script defer src="js/skill-creator.js?v=061a62ef"></script>
+		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+	</head>
+	<body id="skill-creator-page">
+		<iframe id="site-menu" title="Pages" src="navigation.html#skill-creator"></iframe>
+		<header>
+			<h1>Skill Creator</h1>
+			<p>Create reusable Markdown instructions for your Chat agents.</p>
+		</header>
+		<main id="layout">
+			<div id="skill-methods">
+				<section aria-labelledby="skill-manual-title">
+					<h2 id="skill-manual-title">Write a Skill by Hand</h2>
+					<p>Start with a Markdown outline and write your own instructions.</p>
+					<button id="skill-write" type="button" disabled>New skill</button>
+				</section>
+				<section aria-labelledby="skill-source-title">
+					<h2 id="skill-source-title">Create Skill from Web Page</h2>
+					<p id="skill-creator-model"></p>
+					<div id="skill-model-loading" class="model-loading" hidden>
+						<progress aria-label="Browser chat model loading"></progress>
+						<span role="status"></span>
+					</div>
+					<p id="skill-creator-model-warning" class="model-required" role="alert" hidden>
+						<strong>No model active.</strong>
+						<a href="models.html">Select and save a model in Models</a> to generate a skill.
+					</p>
+					<form id="skill-source-form">
+						<label for="skill-source-url">Web page URL</label>
+						<input id="skill-source-url" type="url" placeholder="https://example.com/guide"
+							aria-describedby="skill-source-help" required />
+						<p id="skill-source-help">SUSI Builder reads the page and uses your configured model to turn its text into a skill.</p>
+						<p id="skill-reader-setup" hidden>For pages that need a rendering browser, run
+							<strong>Start Skill Creator.command</strong> from the SUSI Builder folder.</p>
+						<div class="skill-creator-actions">
+							<button id="skill-generate" type="submit" disabled>Generate from URL</button>
+							<button id="skill-cancel" type="button" hidden>Cancel</button>
+						</div>
+						<p id="skill-source-status" role="status" data-vfs-open-status>Opening the workspace…</p>
+					</form>
+					<details id="skill-prompt-settings" open>
+						<summary>Generation prompts</summary>
+						<form id="skill-prompts-form">
+							<label for="skill-body-prompt">Skill text prompt</label>
+							<textarea id="skill-body-prompt" rows="6" maxlength="8000" required></textarea>
+							<label for="skill-name-prompt">Skill name prompt</label>
+							<textarea id="skill-name-prompt" rows="4" maxlength="8000" required></textarea>
+							<button id="skill-save-prompts" type="submit" disabled>Save prompts</button>
+							<p id="skill-prompts-status" role="status"></p>
+						</form>
+					</details>
+				</section>
+			</div>
+			<section aria-labelledby="skill-draft-title">
+				<h2 id="skill-draft-title">Review your skill</h2>
+				<p id="skill-draft-empty">Choose a creation method to start a draft.</p>
+				<form id="skill-draft-form" hidden>
+					<label for="skill-draft-name">Skill name</label>
+					<input id="skill-draft-name" maxlength="80" required />
+					<label for="skill-draft-text">Skill text (Markdown)</label>
+					<textarea id="skill-draft-text" rows="17" maxlength="15000" required></textarea>
+					<p>Activate the saved skill in Skill Library to make it available to Chat agents.</p>
+					<button id="skill-save" type="submit" disabled>Save skill</button>
+				</form>
+				<p id="skill-save-status" role="status"></p>
+				<a id="skill-open-library" hidden>Open in Skill Library to activate</a>
+			</section>
+		</main>
+	</body>
+</html>

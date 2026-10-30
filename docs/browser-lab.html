@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Launch checklist · Practice app</title>
+<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
+<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+<link rel="stylesheet" href="css/browser-lab.css?v=d237c0f2">
+<script defer src="js/browser-share.js?v=98d5daef"></script><script defer src="js/browser-lab.js?v=d62dd154"></script></head>
+<body><header><small>SUSI Builder practice app</small><h1>Launch checklist</h1>
+<p>A small web app for trying browser agents. Changes here are temporary.</p>
+<label for="lab-permission">Share access</label><select id="lab-permission" data-susi-permission>
+<option value="read">Read only</option><option value="interact">Read and request actions</option></select>
+<button id="lab-share" type="button" data-susi-share>Share with SUSI Builder</button>
+<p id="lab-connection" data-susi-status role="status">Not shared.</p></header>
+<main data-susi-surface><h2>Prepare your release</h2><form id="lab-form">
+<label for="lab-task">Checklist item</label><input id="lab-task" name="task" data-susi-action placeholder="Review the landing page" required maxlength="200">
+<label for="lab-priority">Priority</label><select id="lab-priority" data-susi-action><option value="normal">Normal</option><option value="high">High</option></select>
+<button type="submit" data-susi-action>Add item</button></form>
+<ul id="lab-items"><li>Check mobile navigation <button type="button" data-susi-action>Mark complete</button></li></ul>
+<p id="lab-status" role="status">1 open item.</p></main></body></html>

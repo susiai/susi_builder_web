@@ -1,0 +1,189 @@
+#tasks-main,
+#browser-main {
+	width: min(var(--page-width), 100% - 2 * var(--page-gutter));
+	margin: 1.5rem auto 4rem;
+}
+
+.workspace-columns {
+	display: grid;
+	align-items: start;
+	grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+	gap: 1.5rem;
+	margin-bottom: 1.5rem;
+}
+
+.workspace-columns > section,
+.browser-panel {
+	min-width: 0;
+	padding: var(--panel-padding);
+	border: 1px solid var(--color-line);
+	background: var(--color-background-box);
+}
+
+.workspace-columns > section > header,
+.browser-panel > header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+}
+
+.workspace-columns h2,
+.browser-panel h2 {
+	margin: 0;
+	font-size: 1.65rem;
+}
+
+.workspace-columns header a,
+#tasks-queue-note {
+	font-size: 0.8rem;
+	color: var(--color-muted);
+}
+
+.workspace-columns ul,
+.workspace-columns ol {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.workspace-columns li {
+	padding-block: 1rem;
+	border-bottom: 1px solid var(--color-line);
+	overflow-wrap: anywhere;
+}
+
+.workspace-columns li:first-child {
+	padding-top: 0;
+}
+
+.workspace-columns li p {
+	margin: 0.3rem 0 0.75rem;
+	color: var(--color-muted);
+	font-size: 0.85rem;
+	white-space: pre-wrap;
+}
+
+.workspace-columns li strong {
+	display: block;
+}
+
+.workspace-actions {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.8rem;
+	font-size: 0.85rem;
+}
+
+.workspace-status {
+	display: inline-block;
+	color: var(--color-primary);
+	font: 0.7rem var(--font-mono);
+	text-transform: uppercase;
+}
+
+.workspace-status[data-status="failed"],
+.workspace-status[data-status="interrupted"],
+[role="status"][data-error] {
+	color: var(--color-accent-detail);
+}
+
+#tasks-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: end;
+	gap: 0.75rem 1rem;
+}
+
+#tasks-filters > div {
+	width: min(26rem, 100%);
+}
+
+#tasks-filters > a {
+	padding-block: 0.55rem;
+}
+
+#tasks-status:empty,
+#tasks-edit-error:empty {
+	display: none;
+}
+
+#tasks-options {
+	margin-block: 0.6rem 1rem;
+}
+
+#tasks-options label {
+	margin-block-start: 0.8rem;
+}
+
+#tasks-model,
+#tasks-profile-help,
+#tasks-no-projects {
+	color: var(--color-muted);
+	font-size: 0.85rem;
+}
+
+#tasks-activity {
+	grid-column: 1 / -1;
+}
+
+#tasks-edit-dialog {
+	width: min(32rem, 100% - 2rem);
+	max-height: 90vh;
+	padding: var(--panel-padding);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius);
+	background: var(--color-background-box);
+	color: var(--color-foreground);
+}
+
+#tasks-edit-dialog::backdrop {
+	background: rgb(8 10 18 / 78%);
+}
+
+#tasks-edit-dialog form {
+	margin: 0;
+}
+
+#tasks-run-detail {
+	margin-top: 1.5rem;
+	padding-top: 1rem;
+	border-top: 2px solid var(--color-primary);
+}
+
+#tasks-run-detail h3 {
+	font-size: 1.1rem;
+	margin: 0.5rem 0;
+}
+
+#tasks-run-detail pre {
+	max-height: 22rem;
+	overflow: auto;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-size: 0.8rem;
+}
+
+#tasks-run-detail details {
+	margin-block: 0.6rem;
+}
+
+#tasks-run-detail form button {
+	margin-inline-end: 0.5rem;
+	margin-block-end: 0.5rem;
+}
+
+#tasks-runs button,
+#tasks-tasks button {
+	padding: 0.35rem 0.65rem;
+	font-size: 0.8rem;
+}
+
+@media (max-width: 65rem) {
+	.workspace-columns {
+		grid-template-columns: 1fr;
+	}
+}

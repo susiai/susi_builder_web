@@ -253,6 +253,7 @@
 												target="_blank" rel="noopener">Windows walkthrough</a></li>
 										<li><strong>Download a model.</strong> Run one of these commands in Terminal or PowerShell.
 											<ul>
+												<li><code>ollama pull lfm3:1.7b-q4_K_M</code></li>
 												<li><code>ollama pull gemma4:e4b-it-qat</code></li>
 												<li><code>ollama pull gemma4:12b-it-qat</code></li>
 												<li><code>ollama pull qwen3.6:35b-a3b-q4_K_M</code></li>
@@ -302,7 +303,10 @@
 				<section id="speech-to-text" aria-labelledby="speech-title">
 					<h2 id="speech-title"><img src="icons/device-audio-input-microphone.svg" alt="" /> Speech to text</h2>
 					<p>Transcribe audio attachments in Chat and dictate text in Chat or Code Studio.</p>
-					<p id="speech-file-permission" hidden>Chrome may ask for microphone access again after reloading a local file.</p>
+					<p id="speech-file-permission" hidden>Chrome may ask for microphone access again after reloading a local file.
+						On macOS, run <a href="../Start%20Local%20Server.command">Start Local Server.command</a> in the project folder
+						and allow access on <a href="http://127.0.0.1:8000/chat.html">Chat on localhost</a>.
+						To move your workspace to that address, use <a href="workspace.html#workspace-backups">Backups and recovery</a>.</p>
 					<form id="speech-form">
 						<fieldset id="speech-provider-options" disabled>
 							<legend>Transcription method</legend>
@@ -446,13 +450,13 @@
 		<script src="js/skills.js?v=c42ccf4f"></script>
 		<script src="js/file-search.js?v=80072ff5"></script>
 		<script src="js/webfetch.js?v=c50d56e3"></script>
-		<script src="js/llm.js?v=5eb60f13"></script>
+		<script src="js/llm.js?v=93abf4ae"></script>
 		<script src="js/vfs.js?v=6a2f831b"></script>
 		<script src="js/page-settings.js?v=60de7c53"></script>
 		<script src="js/transformer-model-assets.js?v=9de616b6"></script>
-		<script src="js/llm-local.js?v=f8d710c0"></script>
+		<script src="js/llm-local.js?v=e3b0a92d"></script>
 		<script src="js/stt.js?v=91cb9caf"></script>
 		<script src="js/tts.js?v=123a3be2"></script>
-		<script src="js/models.js?v=61b57766"></script>
+		<script src="js/models.js?v=04a603c5"></script>
 	</body>
 </html>

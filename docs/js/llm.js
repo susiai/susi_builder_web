@@ -783,7 +783,7 @@ function createLLM(options = {}) {
             definition: { type: 'function', function: { name: schema.name, description: schema.description,
                 parameters: { type: 'object', properties: schema.properties, required: schema.required || [] } } },
             handler: async (call, context) => {
-                if (!options.browser) throw new Error('No browser connection is available.');
+                if (!options.browser) throw new Error('Open Browser and connect a shared tab first.');
                 const args = JSON.parse(call.function.arguments || '{}');
                 return options.browser.request(schema.name.slice(8), args, context);
             }
@@ -992,12 +992,12 @@ async function writeAgentSettings(changes, expected = {}) {
         const descriptions = settings.toolDescriptions;
         if (limitChanged && Object.hasOwn(expected, 'maxToolCalls') &&
             settings.maxToolCalls !== expected.maxToolCalls && settings.maxToolCalls !== changes.maxToolCalls) {
-            throw new Error('Maximum tool calls changed in another page. Reload Tools to review the latest limit.');
+            throw new Error('Maximum tool calls changed in another page. Reload this page to review the latest limit.');
         }
         for (const [name, description] of edits) {
             const current = descriptions[name] ?? defaults.get(name);
             if (Object.hasOwn(loaded, name) && current !== loaded[name] && current !== description) {
-                throw new Error(`${name} changed in another page. Reload Tools to review the latest description.`);
+                throw new Error(`${name} changed in another page. Reload this page to review the latest description.`);
             }
             if (description === defaults.get(name)) delete descriptions[name];
             else descriptions[name] = description;

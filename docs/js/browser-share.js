@@ -105,14 +105,8 @@ function createSusiBrowserTarget(doc = document) {
 	const script = document.currentScript;
 	const button = document.querySelector("button[data-susi-share]");
 	if (!button || !script || window !== window.top) return;
-	const status = document.querySelector("[data-susi-status]");
-	const hubAddress = script.dataset.susiUrl?.trim();
-	if (!hubAddress) {
-		button.disabled = true;
-		if (status) status.textContent = "Configure a browser connection URL to share this page.";
-		return;
-	}
-	const hubUrl = new URL(hubAddress, script.src);
+	// An app can host a copy of this file and explicitly configure its trusted SUSI Builder URL.
+	const hubUrl = new URL(script.dataset.susiUrl || "../browser.html", script.src);
 	if (!["http:", "https:", "file:"].includes(hubUrl.protocol)) return;
 	const protocol = "webstation-app-v1";
 	const allowedOrigin = hubUrl.protocol === "file:" ? "null" : hubUrl.origin;
@@ -127,6 +121,7 @@ function createSusiBrowserTarget(doc = document) {
 		// A copied or expired launch URL can still start a fresh connection.
 		setTimeout(() => { button.disabled = false; }, 5000);
 	}
+	const status = document.querySelector("[data-susi-status]");
 	const choice = document.querySelector("select[data-susi-permission]");
 	const initialLabel = button.textContent;
 	let invitation, opening, port, poll;
@@ -189,7 +184,7 @@ function createSusiBrowserTarget(doc = document) {
 		if (port || opening) { stop("Sharing ended."); return; }
 		const permission = choice?.value === "interact" ? "interact" : "read";
 		if (invitation && !invitation.window.closed) { share(invitation, permission); return; }
-		// An independently opened tab can request a connection for its current document.
+		// A tab already open independently can start a Browser page for its current document.
 		const token = susiShareId();
 		const url = new URL(hubUrl);
 		url.hash = new URLSearchParams({ share: token, origin: location.protocol === "file:" ? "null" : location.origin });

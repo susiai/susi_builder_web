@@ -53,7 +53,8 @@ from a deferred script. Use the generated 32-character app ID to keep the app's 
 Preview limits the workbench to its app directory. A standalone export uses the same IndexedDB database with
 an app-specific path. Enter model keys in Configuration. They stay in the current tab and are kept out of app files.
 
-The generated app has its own model settings. The preview sandbox limits microphone access and local speech workers.
+Workspace-wide model and Browser controls live in SUSI Builder. The preview sandbox also limits
+microphone access and local speech workers. Configure the generated app's model separately.
 
 ### Browser inference in a standalone app
 
@@ -129,8 +130,9 @@ Opening `create_app.html` starts an in-memory preview, including from disk. **Ap
 
 On a host, Create App fetches the selected assets. A local page can load installed classic scripts directly.
 Each catalog script has a small adapter that exposes its original source to Create App and runs normally elsewhere.
-Generated projects receive the script body with its original license comments. The direct-file reader loads other
-assets from `docs/js/template-static.js`. Keep those packaged assets in sync with their catalog sources.
+Generated projects receive the script body with its original license comments. Fonts, styles and notices for the
+direct-file reader are generated from their catalog sources. After updating a catalog asset, run
+`python3 tools/index-template-assets.py` and use `--check` to verify the installed resources.
 
 ## Verification
 

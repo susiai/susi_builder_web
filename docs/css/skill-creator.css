@@ -1,0 +1,47 @@
+#skill-creator-page #layout {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+}
+
+#skill-creator-page textarea {
+	font-family: var(--font-mono);
+	font-size: 0.84rem;
+}
+
+#skill-creator-page :is(input, textarea) {
+	margin-block-end: 0.75rem;
+}
+
+.skill-creator-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.6rem;
+}
+
+#skill-prompt-settings {
+	padding-block-start: 0.85rem;
+	border-block-start: 1px solid var(--color-line);
+}
+
+#skill-creator-page :is(#skill-source-help, #skill-creator-model) {
+	color: var(--color-muted);
+	font-size: 0.875rem;
+}
+
+#skill-creator-page [role="status"] {
+	overflow-wrap: anywhere;
+}
+
+#skill-creator-page [role="status"]:empty,
+#skill-creator-model:empty {
+	display: none;
+}
+
+#skill-creator-page [data-error] {
+	color: var(--color-accent-detail);
+}
+
+@media (max-width: 58rem) {
+	#skill-creator-page #layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}

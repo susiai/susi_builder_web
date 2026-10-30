@@ -6,7 +6,7 @@ preview share a virtual file system (VFS) stored in the browser's IndexedDB.
 ## Get started
 
 1. Open `docs/index.html` directly in your browser.
-2. Open **Chat** and send a message. SUSI Builder starts with Qwen3 0.6B on WebGPU and falls back to WASM.
+2. Open **Chat** and send a message. New workspaces use LFM3 1.7B on WebGPU and fall back to LFM2.5 350M on WASM.
    It downloads each model when needed. You can send a message while the model loads. Each model works offline once
    its files have downloaded.
 3. Use **Apps → New App** or **Create App** to start another app. Describe what it should do in **Chat**, then
@@ -24,8 +24,8 @@ Speech-to-text and speech output are off until you configure them there.
   data workspace, or game from a starter with a live preview. [Template guide](docs/templates/README.md)
 - **Chat** streams replies and gives the agent tools to read, search, and edit files in the selected app.
   Attach text, PDF, XLSX, DOCX, PPTX, or audio files. Audio attachments use the selected speech-to-text model.
-  Browser chat models run offline once downloaded to `/Models/Chat/`. Qwen3 0.6B supports WebGPU and WASM.
-  Qwen3 1.7B and Qwen3.5 2B use WebGPU. These models accept text and can call the agent's tools.
+  Browser chat models run offline once downloaded to `/Models/Chat/`. Qwen3 0.6B and LFM2.5 350M support WebGPU
+  and WASM. Qwen3 1.7B, Qwen3.5 2B, LFM2.5 1.2B Instruct, and LFM3 1.7B use WebGPU.
 - **Console** runs Bash-like commands and shell scripts against workspace files and keeps command history.
 
 ## How the preview runs without a server
@@ -42,6 +42,10 @@ as SUSI Builder. The generated app includes its own projects, conversation histo
 
 ## Tools and integrations
 
+- **Browser** shares screenshots or a participating app with Chat. Interactive actions require approval in Browser.
+- Use **Skill Creator** to write a skill, then enable it in **Skill Library**. Run
+  `python3 tools/serve-webstation.py` for rendered page reading on localhost. On macOS, you can also use
+  [Start Skill Creator.command](<Start Skill Creator.command>) with a workspace opened from disk.
 - **Tools** lets you edit tool descriptions and set the maximum tool calls per reply.
 - **Chat** can use enabled MCP functions from connectors saved in the workspace configuration.
 - In **Models**, choose local Whisper or a transcription API for audio attachments and dictation in Chat.

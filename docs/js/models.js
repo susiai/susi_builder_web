@@ -75,10 +75,9 @@
 		const client = llmClient.create({ readApiKey: readLLMApiKey });
 		const isBrowser = () => method.value === "browser";
 		const ollamaHost = `http://localhost:${DEFAULT_OLLAMA_PORT}`;
-		const browserModels = llmLocal.models.filter(model => !/^lfm\d/i.test(model.modelId ?? model.id));
 		const browserGroups = [
-			{ name: "chatLocalPrimary", title: "Primary · WebGPU", models: browserModels.filter(model => model.device === "webgpu") },
-			{ name: "chatLocalFallback", title: "Fallback · WASM", models: browserModels.filter(model => model.device === "wasm") }
+			{ name: "chatLocalPrimary", title: "Primary · WebGPU", models: llmLocal.models.filter(model => model.device === "webgpu") },
+			{ name: "chatLocalFallback", title: "Fallback · WASM", models: llmLocal.models.filter(model => model.device === "wasm") }
 		];
 		let config, operation, modelRequest, localCheck, localStatus;
 		let localSelection, apiCatalog = { models: [] };
@@ -242,7 +241,7 @@
 					models.set(id, { id, detail });
 				}
 				const emptyMessage = settings.apihost === ollamaHost
-					? "Connected. Use ollama pull to download a model, then refresh the list."
+					? "Connected. Run ollama pull lfm3:1.7b-q4_K_M to add a model, then refresh the list."
 					: "Connected. No models reported. Enter a model ID to test.";
 				showApiList([...models.values()], models.size ?
 					`${models.size} model${models.size === 1 ? "" : "s"} available.` :

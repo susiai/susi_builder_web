@@ -17,8 +17,8 @@ function createBrowserClient({ discoveryMs = 600, requestTimeout = 180000, sessi
 			const timer = setTimeout(() => {
 				signal?.removeEventListener("abort", abort); channel.close();
 				if (hubs.size !== 1) reject(new Error(hubs.size ?
-					"Several browser connections are available. Open Chat from the connection you want to use." :
-					"No browser connection is available."));
+					"Several Browser pages are connected. Select Open Chat on the Browser page you want to use." :
+					"Open Browser and share an app tab or a tab image."));
 				else { hubId = [...hubs][0]; resolve(hubId); }
 			}, discoveryMs);
 			channel.onmessage = ({ data }) => {
@@ -53,13 +53,13 @@ function createBrowserClient({ discoveryMs = 600, requestTimeout = 180000, sessi
 			const timer = setTimeout(() => {
 				channel.postMessage({ type: "cancel", id: requestId, hubId: requestHub });
 				if (method === "status" && hubId === requestHub) hubId = undefined;
-				finish(new Error("Browser request expired. Check the connection and try again."));
+				finish(new Error("Browser request expired. Review the connection in Browser before trying again."));
 			}, Math.max(0, expiresAt - Date.now()));
 			channel.onmessage = ({ data }) => {
 				if (data?.hubId !== requestHub) return;
 				if (data.type === "connection-closed") {
 					if (hubId === requestHub) hubId = undefined;
-					finish(new Error("The browser connection was closed.")); return;
+					finish(new Error("The Browser connection was closed.")); return;
 				}
 				if (data.type !== "response" || data.id !== requestId) return;
 				finish(data.error ? new Error(data.error) : null, data.result);
