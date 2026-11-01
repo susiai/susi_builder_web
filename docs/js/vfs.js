@@ -44,8 +44,8 @@ const vfsSkipPreload = typeof document !== 'undefined' &&
   document.currentScript?.hasAttribute('data-vfs-skip-preload');
 const vfsScriptURL = typeof document !== 'undefined' ? document.currentScript.src
   : new URL(/\/js\/[^/]*$/.test(location.pathname) ? 'vfs.js' : 'js/vfs.js', location.href).href;
-const vfsPreloadIndexURL = vfsStandaloneApp ? null : new URL(globalThis.VFS_PRELOAD_URL || '../vfs-preload.json', vfsScriptURL);
-const vfsPreloadDirectoryURL = vfsPreloadIndexURL && new URL('../vfs-preload/', vfsPreloadIndexURL);
+const vfsPreloadOverride = globalThis.VFS_PRELOAD_URL;
+const vfsPreloadIndexURL = vfsStandaloneApp ? null : new URL(vfsPreloadOverride || '../vfs-preload.json', vfsScriptURL);
 const vfsTextDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 let vfsPreloadRequest;
 
@@ -97,9 +97,8 @@ function vfsFileValue(data) {
 }
 
 async function fetchVfsDefaults() {
-  async function read(url, allowMissing = false) {
+  async function read(url) {
     const response = await fetch(url, { cache: 'no-store' });
-    if (allowMissing && response.status === 404) return null;
     if (!response.ok) throw new Error(`Unable to read ${url.pathname} (HTTP ${response.status}).`);
     return response;
   }
@@ -110,22 +109,12 @@ async function fetchVfsDefaults() {
   // Validate the entire layout before requesting files. Each path is relative to the raw defaults directory.
   const entries = validateVfsPreload(paths.map(path => ({ path: '/' + path, value: '' })));
   const files = entries.filter(entry => !entry.path.endsWith('/'));
-  const missing = [];
+  const directoryURL = new URL('../vfs-preload/', vfsPreloadIndexURL);
   await Promise.all(files.map(async entry => {
     const relative = entry.path.slice(1).split('/').map(encodeURIComponent).join('/');
-    const response = await read(new URL(relative, vfsPreloadDirectoryURL), true);
-    if (response) entry.value = vfsFileValue(new Uint8Array(await response.arrayBuffer()));
-    else missing.push(entry.path);
+    const response = await read(new URL(relative, directoryURL));
+    entry.value = vfsFileValue(new Uint8Array(await response.arrayBuffer()));
   }));
-  if (missing.length) {
-    // A static host may publish only docs/. Use the complete installed set only if it matches this manifest.
-    if (missing.length === files.length && !globalThis.VFS_PRELOAD_URL) {
-      const installed = await readLocalVfsDefaults();
-      const paths = new Set(installed.map(entry => entry.path));
-      if (paths.size === entries.length && entries.every(entry => paths.has(entry.path))) return installed;
-    }
-    throw new Error(`Missing VFS preload file: ${missing[0]}`);
-  }
   return entries;
 }
 
@@ -155,7 +144,7 @@ async function readInstalledResource(url) {
   return value;
 }
 
-async function readLocalVfsDefaults(onlyPath) {
+async function readPackagedVfsDefaults(onlyPath) {
   // Reset reads the current installation even when this tab already loaded an earlier version.
   const url = new URL('vfs-preload.js', vfsPreloadIndexURL);
   url.searchParams.set('read', Date.now());
@@ -170,7 +159,9 @@ async function readLocalVfsDefaults(onlyPath) {
 function loadVfsPreload() {
   if (!vfsPreloadIndexURL) return Promise.resolve([]);
   if (!vfsPreloadRequest) {
-    const request = vfsPreloadIndexURL.protocol === 'file:' ? readLocalVfsDefaults() : fetchVfsDefaults();
+    // The bundle is published with the site, including on hosts that serve only docs/.
+    const request = vfsPreloadOverride && vfsPreloadIndexURL.protocol !== 'file:'
+      ? fetchVfsDefaults() : readPackagedVfsDefaults();
     vfsPreloadRequest = request.finally(() => { vfsPreloadRequest = undefined; });
   }
   return vfsPreloadRequest;
@@ -198,7 +189,7 @@ async function initializeVfsDatabase(database, loadDefaults = loadVfsPreload) {
   // Opening an existing workspace can reuse its initialized state.
   const [opened, path] = await vfsTransaction(database, 'readonly', readState);
   checkVfsGeneration(vfsSessions.get(database), opened);
-  const seedChatTerminal = loadDefaults === loadVfsPreload && !globalThis.VFS_PRELOAD_URL;
+  const seedChatTerminal = loadDefaults === loadVfsPreload && !vfsPreloadOverride;
   let state;
   if (path !== undefined) {
     state = opened?.initialized ? opened : await vfsTransaction(database, 'readwrite', async (store, metadata) => {
@@ -272,7 +263,7 @@ async function seedVfsChatTerminal(database) {
   if (pending.install && !entries.some(entry => entry.path === indexPath)) return;
   const script = upgrade && entries.find(entry => entry.path === scriptPath);
   if (upgrade && (!script || script.value === pending.source)) return;
-  const artwork = pending.addArtwork && (upgrade ? entries : await readLocalVfsDefaults(artworkPath))
+  const artwork = pending.addArtwork && (upgrade ? entries : await readPackagedVfsDefaults(artworkPath))
     .find(entry => entry.path === artworkPath);
   if (pending.addArtwork && !artwork) return;
 

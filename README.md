@@ -65,8 +65,10 @@ fresh workspace if the database is empty.
 ## Development checks
 
 Serve the repository root with a static server to open the relevant browser checks in `tests/`.
-Keep the hosted index in `docs/vfs-preload.json` and the packaged defaults in `docs/vfs-preload.js` in sync with
-`vfs-preload/` when changing the bundled files.
+The browser loads its default workspace from `docs/vfs-preload.js`, including when GitHub Pages publishes `docs/`.
+Keep that package and the raw file index in `docs/vfs-preload.json` in sync with `vfs-preload/` when changing the
+bundled files. To read the raw files when serving the repository root, set `globalThis.VFS_PRELOAD_URL` to
+`../vfs-preload.json` before loading `docs/js/vfs.js`.
 
 SUSI Builder is distributed under the MIT license. The VFS source, bundled libraries, and fonts carry their own
 license notices. [License](LICENSE)
