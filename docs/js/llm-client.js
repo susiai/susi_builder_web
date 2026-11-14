@@ -17,7 +17,13 @@ globalThis.llmClient = (() => {
         return { signal: controller.signal, touch, dispose() { clearTimeout(timer); signal?.removeEventListener('abort', abort); } };
     }
 
+    function isRetiredEndpoint(host) {
+        try { return new URL(host).hostname.replace(/\.$/, '') === 'llm.susi.ai'; }
+        catch { return false; }
+    }
+
     function llmEndpointKey(host, key) {
+        if (isRetiredEndpoint(host)) throw new Error('This model endpoint has been retired. Choose a different endpoint.');
         if (key && key !== '_') {
             const url = new URL(host);
             if (url.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
@@ -394,7 +400,7 @@ globalThis.llmClient = (() => {
     }
 
     return { create, requestOptions, normalizeConfig: normalizeLLMConfig,
-        validateApiKey: llmEndpointKey, defaultOllamaPort: DEFAULT_OLLAMA_PORT };
+        validateApiKey: llmEndpointKey, isRetiredEndpoint, defaultOllamaPort: DEFAULT_OLLAMA_PORT };
 })();
 
 /* end susi source */

@@ -855,6 +855,9 @@ function parseLLMConfigFile(source, strict = false) {
 
 function normalizeWorkspaceLLMConfig(current, changes = {}) {
     const updated = { ...current, ...changes };
+    if (llmClient.isRetiredEndpoint(updated.apihost)) {
+        Object.assign(updated, { apihost: "", model: "", chatProvider: globalThis.llmLocal ? "browser" : "api" });
+    }
     const config = normalizeLLMConfig(updated);
     if (!globalThis.llmLocal) return { ...current, ...config };
 
