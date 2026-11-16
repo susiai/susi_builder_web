@@ -128,7 +128,8 @@ Paths start at the folder containing `docs/` and `LICENSE`. Preview and creation
 Opening `create_app.html` starts an in-memory preview, including from disk. **App name** names a folder under
 `/Apps/` in the VFS. **Create App** writes all its files in one transaction and displays the resulting path.
 
-On a host, Create App fetches the selected assets. A local page can load installed classic scripts directly.
+On a host, Create App fetches the selected assets under `docs/` and reads the repository's MIT notice from the
+packaged static resources. A local page can load installed classic scripts directly.
 Each catalog script has a small adapter that exposes its original source to Create App and runs normally elsewhere.
 Generated projects receive the script body with its original license comments. Fonts, styles and notices for the
 direct-file reader are generated from their catalog sources. After updating a catalog asset, run

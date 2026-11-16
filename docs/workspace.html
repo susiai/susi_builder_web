@@ -27,14 +27,15 @@
 					<p>Backups include speech settings. Download the speech models again after restoring a backup.</p>
 					<p id="storage-origin"></p><p id="storage-status" data-vfs-open-status role="status"></p>
 					<button id="storage-persist" type="button" disabled>Request persistent storage</button>
-					<label for="backup-password">Backup passphrase (optional)</label>
-					<input id="backup-password" type="password" autocomplete="new-password" minlength="12" />
-					<p>Use at least 12 characters for an encrypted .wsbackup file. An empty passphrase creates a readable ZIP.
-						Keep the passphrase separately; it cannot be recovered. Limit: 128 MiB unpacked, 64 MiB for encrypted archives.</p>
+					<p>Backups download as unencrypted ZIP files with a 128 MiB unpacked limit.</p>
 					<button id="backup-export" type="button" disabled>Download workspace backup</button>
 					<button id="backup-safety" type="button" hidden>Download previous restore safety backup</button>
 					<label for="backup-file">Restore a workspace backup</label>
 					<input id="backup-file" type="file" accept=".zip,.wsbackup" />
+					<div id="restore-passphrase-field" hidden>
+						<label for="restore-passphrase">Passphrase for this encrypted backup</label>
+						<input id="restore-passphrase" type="password" autocomplete="off" />
+					</div>
 					<button id="backup-inspect" type="button" disabled>Inspect backup</button>
 					<p id="backup-summary"></p><button id="backup-restore" type="button" disabled>Restore backup…</button>
 					<p id="backup-status" role="status"></p>
@@ -76,12 +77,12 @@
 				<button id="backup-restore-confirm" type="button">Replace workspace</button></div>
 		</dialog>
 
-		<script src="js/vfs.js?v=bc44befc" data-vfs-skip-preload></script>
+		<script src="js/vfs.js?v=042c0bb7" data-vfs-skip-preload></script>
 		<script src="js/transformer-model-assets.js?v=9de616b6"></script>
 		<script src="js/stt.js?v=91cb9caf"></script>
 		<script src="js/tts.js?v=123a3be2"></script>
 		<script src="js/vendor/zip-2.25.0.min.js?v=49bb1d59"></script>
-		<script src="js/vfs-zip.js?v=33ab8df8"></script>
-		<script src="js/workspace.js?v=fca16eeb"></script>
+		<script src="js/vfs-zip.js?v=5a1453de"></script>
+		<script src="js/workspace.js?v=7c2b43f5"></script>
 	</body>
 </html>

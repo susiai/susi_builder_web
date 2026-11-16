@@ -54,7 +54,8 @@ as SUSI Builder. The generated app includes its own projects, conversation histo
 
 ## Workspace storage and backups
 
-**Workspace** backs up and restores apps, settings, conversations, and run activity, with optional encryption.
+**Workspace** backs up apps, settings, conversations, and run activity in unencrypted ZIP files. It can also restore
+older encrypted `.wsbackup` files using their original passphrase.
 Browser storage is tied to the address you open. Use a workspace backup to move between a local file and a hosted copy.
 
 **Reset Default Files** restores the bundled files from `vfs-preload/`, including `config.json`, and keeps other

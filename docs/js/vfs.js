@@ -38,6 +38,7 @@ const vfsAppRoot = '/.webstation/apps/';
 const vfsChatTerminalRoot = '/Apps/chat-terminal/';
 const vfsChatTerminalSeed = 'bundled-chat-terminal';
 const vfsChatTerminalVersion = 4;
+const vfsSkillsSeed = 'bundled-skills';
 const vfsStandaloneApp = typeof document !== 'undefined' &&
   document.currentScript?.hasAttribute('data-vfs-standalone');
 const vfsSkipPreload = typeof document !== 'undefined' &&
@@ -96,7 +97,7 @@ function vfsFileValue(data) {
   return data;
 }
 
-async function fetchVfsDefaults() {
+async function fetchVfsDefaults(include) {
   async function read(url) {
     const response = await fetch(url, { cache: 'no-store' });
     if (!response.ok) throw new Error(`Unable to read ${url.pathname} (HTTP ${response.status}).`);
@@ -108,14 +109,15 @@ async function fetchVfsDefaults() {
   }
   // Validate the entire layout before requesting files. Each path is relative to the raw defaults directory.
   const entries = validateVfsPreload(paths.map(path => ({ path: '/' + path, value: '' })));
-  const files = entries.filter(entry => !entry.path.endsWith('/'));
+  const selected = include ? entries.filter(entry => include(entry.path)) : entries;
+  const files = selected.filter(entry => !entry.path.endsWith('/'));
   const directoryURL = new URL('../vfs-preload/', vfsPreloadIndexURL);
   await Promise.all(files.map(async entry => {
     const relative = entry.path.slice(1).split('/').map(encodeURIComponent).join('/');
     const response = await read(new URL(relative, directoryURL));
     entry.value = vfsFileValue(new Uint8Array(await response.arrayBuffer()));
   }));
-  return entries;
+  return selected;
 }
 
 // Classic scripts can deliver installed resources when a file: page cannot fetch sibling files.
@@ -144,24 +146,25 @@ async function readInstalledResource(url) {
   return value;
 }
 
-async function readPackagedVfsDefaults(onlyPath) {
+async function readPackagedVfsDefaults(include) {
   // Reset reads the current installation even when this tab already loaded an earlier version.
   const url = new URL('vfs-preload.js', vfsPreloadIndexURL);
   url.searchParams.set('read', Date.now());
   const files = await readInstalledResource(url);
-  const selected = onlyPath ? files.filter(([path]) => '/' + path === onlyPath) : files;
+  const selected = include ? files.filter(([path]) => include('/' + path)) : files;
   return validateVfsPreload(selected.map(([path, encoded]) => ({
     path: '/' + path,
     value: path.endsWith('/') ? '' : vfsFileValue(Uint8Array.from(atob(encoded), char => char.charCodeAt(0)))
   })));
 }
 
-function loadVfsPreload() {
+function loadVfsPreload(include) {
   if (!vfsPreloadIndexURL) return Promise.resolve([]);
+  const read = vfsPreloadOverride && vfsPreloadIndexURL.protocol !== 'file:' ? fetchVfsDefaults : readPackagedVfsDefaults;
+  if (include) return read(include);
   if (!vfsPreloadRequest) {
     // The bundle is published with the site, including on hosts that serve only docs/.
-    const request = vfsPreloadOverride && vfsPreloadIndexURL.protocol !== 'file:'
-      ? fetchVfsDefaults() : readPackagedVfsDefaults();
+    const request = read();
     vfsPreloadRequest = request.finally(() => { vfsPreloadRequest = undefined; });
   }
   return vfsPreloadRequest;
@@ -204,6 +207,7 @@ async function initializeVfsDatabase(database, loadDefaults = loadVfsPreload) {
       const [current, existingPath] = await readState(store, metadata);
       if (existingPath === undefined && current?.generation === opened?.generation) {
         for (const { path, value } of defaults) await vfsRequest(store.add({ id: path, value }));
+        if (loadDefaults === loadVfsPreload) await vfsRequest(metadata.put(true, vfsSkillsSeed));
         if (seedChatTerminal && defaults.some(entry => entry.path === vfsChatTerminalRoot + 'index.html')) {
           await vfsRequest(metadata.put(vfsChatTerminalVersion, vfsChatTerminalSeed));
         }
@@ -212,11 +216,38 @@ async function initializeVfsDatabase(database, loadDefaults = loadVfsPreload) {
     });
   }
   vfsSessions.set(database, { generation: state.generation, stale: false });
+  if (loadDefaults === loadVfsPreload) {
+    try { await seedVfsSkills(database); }
+    catch (error) { console.warn('Unable to install bundled skills:', error); }
+  }
   if (seedChatTerminal) {
     // Keep an existing workspace usable if its bundled app cannot be installed yet.
     try { await seedVfsChatTerminal(database); }
     catch (error) { console.warn('Unable to install bundled Chat Terminal:', error); }
   }
+}
+
+async function seedVfsSkills(database) {
+  const installed = await vfsTransaction(database, 'readonly', (_store, metadata) => vfsRequest(metadata.get(vfsSkillsSeed)));
+  if (installed) return;
+  const entries = await loadVfsPreload(path => path.startsWith('/Skills/'));
+  await vfsTransaction(database, 'readwrite', async (store, metadata) => {
+    if (await vfsRequest(metadata.get(vfsSkillsSeed))) return;
+    // Defaults list parents first. Keep user files even when one occupies a bundled folder's path.
+    const blockedFolders = [];
+    for (const { path, value } of entries) {
+      if (blockedFolders.some(folder => path.startsWith(folder))) continue;
+      const directory = path.endsWith('/');
+      const conflict = directory ? path.slice(0, -1) : vfsDirectoryRange(path + '/');
+      if (await vfsRequest(store.getKey(conflict)) !== undefined) {
+        if (directory) blockedFolders.push(path);
+        continue;
+      }
+      if (await vfsRequest(store.getKey(path)) === undefined) await vfsRequest(store.add({ id: path, value }));
+    }
+    // Later deletions are intentional. The library can reinstall defaults on request.
+    await vfsRequest(metadata.put(true, vfsSkillsSeed));
+  });
 }
 
 async function seedVfsChatTerminal(database) {
@@ -263,7 +294,7 @@ async function seedVfsChatTerminal(database) {
   if (pending.install && !entries.some(entry => entry.path === indexPath)) return;
   const script = upgrade && entries.find(entry => entry.path === scriptPath);
   if (upgrade && (!script || script.value === pending.source)) return;
-  const artwork = pending.addArtwork && (upgrade ? entries : await readPackagedVfsDefaults(artworkPath))
+  const artwork = pending.addArtwork && (upgrade ? entries : await readPackagedVfsDefaults(path => path === artworkPath))
     .find(entry => entry.path === artworkPath);
   if (pending.addArtwork && !artwork) return;
 
@@ -1117,7 +1148,7 @@ async function openVfs({ existingOnly = false } = {}) {
         request.onerror = () => reject(request.error);
       });
     },
-    addFolderTree: function (name, entries, { parent = '/' } = {}) {
+    addFolderTree: function (name, entries, { parent = '/', reuseMatching = false } = {}) {
       const parentPath = vfs.normalizeDirPath(vfs.fileSystem.resolvePath('/', parent));
       // Create the parent if needed, pick a free name, and write the complete tree atomically.
       return vfsTransaction(db, 'readwrite', async (store) => {
@@ -1134,6 +1165,16 @@ async function openVfs({ existingOnly = false } = {}) {
         }
         const keys = await vfsRequest(store.getAllKeys(directoryRange(parentPath, true)));
         const names = new Set(keys.map(key => key.slice(parentPath.length).split('/')[0]));
+        if (reuseMatching) {
+          // Check for an unchanged tree in the same transaction that can create its replacement.
+          for (const candidate of names) {
+            if (candidate !== name && candidate.replace(/ \([1-9]\d*\)$/, '') !== name) continue;
+            const folder = `${parentPath}${candidate}/`;
+            if (await vfsRequest(store.count(directoryRange(folder, true))) !== entries.length) continue;
+            const records = await Promise.all(entries.map(({ path }) => vfsRequest(store.get(folder + path))));
+            if (entries.every(({ value }, index) => records[index] && records[index].value === value)) return folder;
+          }
+        }
         let availableName = name;
         for (let number = 2; names.has(availableName); number += 1) {
           availableName = `${name} (${number})`;

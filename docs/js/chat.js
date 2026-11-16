@@ -895,6 +895,12 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		if (!vfs || vfs.wasReset) return;
 		const request = ++projectRequest;
 		try {
+			const scratchpad = !projectsRoot && !isWorkspaceRecovering()
+				? await createVfsApp(vfs, "builder-scratchpad", undefined, {
+					indexHtml: "<html>\n<head>\n<title>Scratchpad</title>\n</head>\n<body>\n</body>\n</html>\n",
+					reuseMatching: true
+				})
+				: undefined;
 			const entries = await vfs.ls(projectsRoot || "/");
 			const paths = projectsRoot
 				? [projectsRoot, ...new Set(entries.filter(entry => entry.includes("/"))
@@ -935,7 +941,8 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 			if (activeProject && !paths.includes(activeProject) && generation) {
 				generation.abort(new DOMException("The selected project is no longer available.", "AbortError"));
 			} else if (!activeProject || !paths.includes(activeProject)) {
-				selectProject(paths.includes(chatPreferences.project) ? chatPreferences.project : paths[0], false);
+				const fallback = paths.includes(scratchpad) ? scratchpad : paths[0];
+				selectProject(paths.includes(chatPreferences.project) ? chatPreferences.project : fallback, false);
 			}
 			updateControls();
 		} catch (error) {
@@ -1419,12 +1426,12 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 
 	async function refreshChat() {
 		if (!vfs || vfs.wasReset || replyBusy() || creatingProject || loadingAttachments || dictation.busy) return;
+		await refreshProjects();
 		const request = ++speechOutputRequest;
 		await Promise.all([loadChatConfig(), loadSpeechConfig(), (async () => {
 			const settings = await tts.activeSettings(vfs).catch(() => undefined);
 			if (request === speechOutputRequest && !vfs.wasReset) replySpeech.setSettings(settings);
 		})()]);
-		await refreshProjects();
 	}
 	window.addEventListener("focus", refreshChat);
 	window.addEventListener("susi-primary-model-retry", () => {
@@ -1525,24 +1532,6 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 			vfs = await window.vfsReady;
 			workstationStore = createWorkstationStore(vfs);
 			await refreshChat();
-			if (!projectPaths.length && !projectsRoot && canPrepareLocal(currentConfig)) {
-				const createScratchpad = async () => {
-					if (!findVfsProjects(await vfs.ls("/")).length) await createVfsApp(vfs, "Scratchpad");
-				};
-				if (navigator.locks) {
-					let acquired = false;
-					try {
-						await navigator.locks.request("webstation.chat-scratchpad", () => {
-							acquired = true;
-							return createScratchpad();
-						});
-					} catch (error) {
-						if (acquired || error.name !== "SecurityError") throw error;
-						await createScratchpad();
-					}
-				} else await createScratchpad();
-				await refreshProjects();
-			}
 			const params = new URLSearchParams(location.search);
 			const requested = params.get("project");
 			if (projectPaths.includes(requested)) selectProject(requested);

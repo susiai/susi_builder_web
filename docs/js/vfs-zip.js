@@ -191,11 +191,10 @@ const { vfsZip, susiBackup } = (() => {
 		if (!crypto.subtle) throw new Error("Encrypted backups require HTTPS, localhost, or a supported local-file context.");
 		const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
 		return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 600000, hash: "SHA-256" }, material,
-			{ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+			{ name: "AES-GCM", length: 256 }, false, ["decrypt"]);
 	}
-	async function encode(snapshot, { password = "", local = collectLocal() } = {}) {
+	async function encode(snapshot, { local = collectLocal() } = {}) {
 		validateLocal(local);
-		if (password && password.length < 12) throw new Error("Use a backup passphrase with at least 12 characters.");
 		const manifest = { format: "webstation-backup", version: 2, createdAt: new Date().toISOString(), entries: [], local };
 		if (snapshot.entries.length > maxEntries) throw new Error("Backup exceeds 20,000 file entries.");
 		const writer = new zip.ZipWriter(new zip.BlobWriter("application/zip"), { useWebWorkers: false });
@@ -215,15 +214,7 @@ const { vfsZip, susiBackup } = (() => {
 		const manifestText = JSON.stringify(manifest);
 		if (new Blob([manifestText]).size > maxManifestBytes) throw new Error("Backup manifest exceeds the 8 MiB limit.");
 		await writer.add("manifest.json", new zip.TextReader(manifestText));
-		const blob = await writer.close();
-		if (!password) return { blob, extension: "zip" };
-		if (blob.size > maxEncryptedBytes) throw new Error("Encrypted backups are limited to 64 MiB. Use a ZIP backup for larger workspaces.");
-		const salt = crypto.getRandomValues(new Uint8Array(16));
-		const iv = crypto.getRandomValues(new Uint8Array(12));
-		const header = new Uint8Array([...magic, ...salt, ...iv]);
-		const key = await keyFor(password, salt);
-		const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: header, tagLength: 128 }, key, await blob.arrayBuffer());
-		return { blob: new Blob([header, cipher], { type: "application/octet-stream" }), extension: "wsbackup" };
+		return { blob: await writer.close(), extension: "zip" };
 	}
 	async function decode(file, password = "") {
 		if (file.size > maxExpandedBytes + 10 * 1024 * 1024) throw new Error("Backup file is too large.");
@@ -231,6 +222,10 @@ const { vfsZip, susiBackup } = (() => {
 		const header = new Uint8Array(await file.slice(0, magic.length + 28).arrayBuffer());
 		if (magic.every((byte, index) => header[index] === byte)) {
 			if (file.size > maxEncryptedBytes + header.length + 16) throw new Error("Encrypted backup is too large.");
+			if (!password) {
+				throw Object.assign(new Error("Enter the passphrase for this encrypted backup, then inspect it again."),
+					{ code: "BACKUP_PASSPHRASE_REQUIRED" });
+			}
 			try {
 				const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: header.slice(magic.length + 16),
 					additionalData: header, tagLength: 128 }, await keyFor(password, header.slice(magic.length, magic.length + 16)),

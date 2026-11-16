@@ -17,11 +17,12 @@ function findVfsProjects(paths) {
 		.sort((a, b) => a.localeCompare(b));
 }
 
-function createVfsApp(vfs, name, entries = [
-	{ path: "index.html", value: "" },
-	{ path: "app.json", value: JSON.stringify({ version: 1, name, pinned: false }, null, 2) + "\n" }
-]) {
-	return vfs.addFolderTree(name, entries, { parent: VFS_APPS_DIRECTORY });
+function createVfsApp(vfs, name, entries, { indexHtml = "", reuseMatching = false } = {}) {
+	const files = entries ?? [
+		{ path: "index.html", value: indexHtml },
+		{ path: "app.json", value: JSON.stringify({ version: 1, name, pinned: false }, null, 2) + "\n" }
+	];
+	return vfs.addFolderTree(name, files, { parent: VFS_APPS_DIRECTORY, reuseMatching });
 }
 
 function isVfsPreviewFolder(path) {

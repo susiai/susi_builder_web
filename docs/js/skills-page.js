@@ -205,7 +205,7 @@
 	}
 
 	try {
-		defaultSkills = (await vfs.readDefaults()).filter(entry => entry.path.startsWith(workspaceSkills.root) && /\.md$/i.test(entry.path));
+		defaultSkills = (await vfs.readDefaults(path => path.startsWith(workspaceSkills.root))).filter(entry => /\.md$/i.test(entry.path));
 		updateInstallButton();
 	} catch (error) {
 		install.title = "Could not read default skills. " + (error.message || error);

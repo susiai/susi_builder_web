@@ -111,12 +111,9 @@ const templateEngine = (() => {
 	const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 	const hostedReader = assetReader(async file => {
 		const { source, binary, rawScript } = file;
+		// Repository-level files such as LICENSE ship in the static resource bundle.
+		if (!source.startsWith('docs/')) return (await localReader(file)).value;
 		const response = await fetch(sourceURL(source), { cache: 'no-cache' });
-		// Hosts publishing only docs/ may return a 404 or their index page for the repository license.
-		const indexPage = response.ok && response.headers.get('content-type')?.startsWith('text/html');
-		if (!source.startsWith('docs/') && (response.status === 404 || indexPage)) {
-			return (await localReader(file)).value;
-		}
 		if (!response.ok) throw new Error(`Unable to load ${source} (HTTP ${response.status}).`);
 		const bytes = new Uint8Array(await response.arrayBuffer());
 		if (binary) return bytes;

@@ -4,7 +4,8 @@
 	const $ = id => document.getElementById(id);
 	const backupStatus = $("backup-status");
 	const backupFile = $("backup-file");
-	const password = $("backup-password");
+	const restorePassphrase = $("restore-passphrase");
+	const restorePassphraseField = $("restore-passphrase-field");
 	const restore = $("backup-restore");
 	const restoreDialog = $("backup-restore-dialog");
 	const restoreConfirm = $("backup-restore-confirm");
@@ -14,7 +15,7 @@
 	const resetConfirm = $("confirm-vfs-reset");
 	const resetStatus = $("vfs-reset-status");
 	const resetError = $("vfs-reset-error");
-	const actions = [$("backup-export"), $("backup-inspect"), $("backup-safety"), backupFile, password,
+	const actions = [$("backup-export"), $("backup-inspect"), $("backup-safety"), backupFile, restorePassphrase,
 		$("backup-restore-cancel"), clearButton, resetDefaults, $("cancel-vfs-reset"), resetConfirm];
 	let vfs;
 	let busy = false;
@@ -56,11 +57,16 @@
 		$("backup-summary").textContent = "";
 	}
 
-	function encodeWorkspace(snapshot, options) {
+	function clearRestorePassphrase() {
+		restorePassphrase.value = "";
+		restorePassphraseField.hidden = true;
+	}
+
+	function encodeWorkspace(snapshot, local) {
 		// Pinned model downloads can be restored from their sources and exceed the archive limit.
 		const entries = snapshot.entries.filter(entry =>
 			!stt.modelPaths.has(entry.path) && !tts.modelPaths.has(entry.path));
-		return susiBackup.encode({ ...snapshot, entries }, options);
+		return susiBackup.encode({ ...snapshot, entries }, { local });
 	}
 
 	function download(result, stem = "workspace-backup") {
@@ -75,10 +81,11 @@
 	$("backup-export").onclick = () => run(async () => {
 		notice("Reading a consistent workspace snapshot…");
 		const snapshot = await vfs.recovery.read();
-		download(await encodeWorkspace(snapshot, { password: password.value }));
+		download(await encodeWorkspace(snapshot));
 		notice("Backup created. Keep the file outside browser storage; session API keys are excluded.");
 	});
-	for (const input of [backupFile, password]) input.addEventListener("input", () => {
+	for (const input of [backupFile, restorePassphrase]) input.addEventListener("input", () => {
+		if (input === backupFile) clearRestorePassphrase();
 		clearInspection();
 		controls();
 	});
@@ -88,7 +95,7 @@
 		clearInspection();
 		const request = readRequest;
 		notice("Validating workspace backup…");
-		const snapshot = await susiBackup.decode(file, password.value);
+		const snapshot = await susiBackup.decode(file, restorePassphrase.value);
 		const current = await vfs.recovery.read();
 		const expectedDigest = await vfsSnapshotDigest(current.entries);
 		if (request !== readRequest) return;
@@ -99,6 +106,9 @@
 		$("backup-summary").textContent = `${snapshot.entries.length} file/folder entries, ` +
 			`${snapshot.local.length} conversation/preferences records. ` + (endpoint ? `Model endpoint in backup: ${endpoint}.` : "");
 		notice("Backup validated. Review the replacement scope before restoring.");
+	}, error => {
+		if (error.code === "BACKUP_PASSPHRASE_REQUIRED") restorePassphraseField.hidden = false;
+		notice(error.message || String(error), true);
 	});
 	restore.onclick = () => {
 		$("backup-restore-error").textContent = "";
@@ -130,7 +140,7 @@
 	$("backup-safety").onclick = () => run(async () => {
 		const snapshot = await vfs.recovery.getSafety();
 		if (!snapshot) throw new Error("No previous restore snapshot exists.");
-		const backup = await encodeWorkspace(snapshot, { password: password.value, local: snapshot.local || [] });
+		const backup = await encodeWorkspace(snapshot, snapshot.local || []);
 		download(backup, "workspace-before-restore");
 	});
 	$("storage-persist").onclick = () => run(async () => {
@@ -174,7 +184,7 @@
 				$("storage-status").textContent = "";
 				notice("");
 				backupFile.value = "";
-				password.value = "";
+				clearRestorePassphrase();
 				resetStatus.textContent = "Workspace cleared. Apps, conversations, and console history were deleted.";
 			} else {
 				await vfs.resetDefaultFiles();
