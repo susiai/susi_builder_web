@@ -6,7 +6,11 @@
   "chatLocalPrimary": "lfm3-1.7b-webgpu",
   "chatLocalFallback": "lfm2.5-350m-wasm",
   "thinking": false,
-  "pages": {},
+  "pages": {
+    "skills": {
+      "enabled": ["app-icon-and-favicon.md"]
+    }
+  },
   "mcpServers": [],
   "agents": {
     "maxToolCalls": 100,

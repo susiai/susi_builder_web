@@ -10,6 +10,14 @@
 		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
 		<link rel="stylesheet" href="css/chat.css?v=56bef062" />
 		<link rel="stylesheet" href="css/speech-dictation.css?v=92b87b4e" />
+		<style>
+			.chat-assistant { grid-template-columns: 3.9rem minmax(0, 1fr); }
+			.chat-avatar {
+				height: 1.95rem;
+				background: var(--color-primary) url("img/susi26_black_small.png") center / 3.25rem auto no-repeat;
+			}
+			.chat-avatar::before { content: none; }
+		</style>
 		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
 	</head>
 	<body id="chat-page">
@@ -17,11 +25,11 @@
 		<script src="js/browser-client.js?v=b4dbd832"></script>
 		<script src="js/agent-runtime.js?v=177bd863"></script>
 		<script src="js/workstation-state.js?v=3fc703bb"></script>
-		<script src="js/llm-client.js?v=7d0f3bce"></script>
+		<script src="js/llm-client.js?v=5f33bd30"></script>
 		<script src="js/skills.js?v=c42ccf4f"></script>
 		<script src="js/file-search.js?v=80072ff5"></script>
 		<script src="js/webfetch.js?v=c50d56e3"></script>
-		<script src="js/llm.js?v=46bf5719"></script>
+		<script src="js/llm.js?v=0be8a99f"></script>
 		<script src="js/vfs.js?v=042c0bb7"></script>
 		<script src="js/page-settings.js?v=60de7c53"></script>
 		<script src="js/mcp.js?v=1a56a667"></script>
@@ -30,10 +38,10 @@
 		<script src="js/vendor/markdown-it-15.0.3.min.js?v=0d6a45cf"></script>
 		<script src="js/document-attachments.js?v=af6df966"></script>
 		<script src="js/transformer-model-assets.js?v=9de616b6"></script>
-		<script src="js/llm-local.js?v=e3b0a92d"></script>
+		<script src="js/llm-local.js?v=9b513e41"></script>
 		<script src="js/stt.js?v=91cb9caf"></script>
 		<script src="js/tts.js?v=123a3be2"></script>
-		<script src="js/chat.js?v=d8f844b9"></script>
+		<script src="js/chat.js?v=cec179ff"></script>
 		<script>mountSusiChat();</script>
 	</body>
 </html>

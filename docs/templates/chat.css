@@ -9,7 +9,7 @@
 	overflow-wrap: anywhere;
 }
 
-#project-chat, #chat-configuration {
+#project-chat {
 	grid-column: 1 / -1;
 }
 
@@ -58,22 +58,4 @@
 #chat-message { min-height: 4rem; }
 .chat-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 #chat-auth { margin-block: 0.75rem; }
-#chat-status, #chat-config-status { min-height: 1.5em; margin-top: 0.75rem; }
-
-#chat-configuration {
-	display: grid;
-	grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-	gap: 0.75rem 1.5rem;
-	align-items: start;
-}
-
-#chat-configuration > :is(h2, p) { grid-column: 1 / -1; margin-bottom: 0; }
-#chat-config-form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
-#chat-config-form :is(input, textarea), #chat-models { margin-bottom: 0.75rem; }
-#chat-key-help { display: block; margin-bottom: 0.75rem; }
-#chat-thinking-label { display: flex; align-items: center; gap: 0.5rem; margin-block: 0.25rem 0.75rem; }
-#chat-thinking { width: auto; margin: 0; }
-
-@media (max-width: 44rem) {
-	#chat-configuration { grid-template-columns: minmax(0, 1fr); }
-}
+#chat-status { min-height: 1.5em; margin-top: 0.75rem; }

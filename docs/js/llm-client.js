@@ -84,6 +84,104 @@ globalThis.llmClient = (() => {
         };
     }
 
+    function parseConfigFile(source, path) {
+        const config = JSON.parse(source === undefined ? "{}" : source);
+        if (!config || typeof config !== "object" || Array.isArray(config)) {
+            throw new Error(`${path.split("/").at(-1)} must contain a JSON object.`);
+        }
+        return config;
+    }
+
+    function normalizeWorkspaceLLMConfig(current, changes = {}) {
+        const updated = { ...current, ...changes };
+        if (isRetiredEndpoint(updated.apihost)) {
+            Object.assign(updated, { apihost: "", model: "", chatProvider: globalThis.llmLocal ? "browser" : "api" });
+        }
+        const config = normalizeLLMConfig(updated);
+        if (!globalThis.llmLocal) return { ...current, ...config };
+
+        const { chatLocalModel, chatLocalDevice } = updated;
+        // Older workspaces with no selected model can use the same first-run setup.
+        if (!config.chatProvider && !config.model.trim() && config.apihost === DEFAULT_LLM_API_HOST) {
+            config.chatProvider = llmLocal.defaultConfig.chatProvider;
+            config.thinking = llmLocal.defaultConfig.thinking;
+        }
+        if (config.chatProvider === "browser" || chatLocalModel !== undefined || chatLocalDevice !== undefined) {
+            Object.assign(config, llmLocal.localConfig({ ...config, chatLocalModel }));
+        }
+        const saved = { ...current, ...config };
+        delete saved.chatLocalModel;
+        delete saved.chatLocalDevice;
+        return saved;
+    }
+
+    function createConfigStore(vfs, path) {
+        function update(changes, validate) {
+            return vfs.update(path, source => {
+                const current = parseConfigFile(source, path);
+                const next = normalizeWorkspaceLLMConfig(current, changes);
+                if (validate && globalThis.llmLocal && next.chatProvider === "browser") {
+                    llmLocal.modelPair(next.chatLocalPrimary, next.chatLocalFallback);
+                }
+                return JSON.stringify(next, null, 2);
+            });
+        }
+
+        return {
+            async read() {
+                let source;
+                try { source = await vfs.getasync(path); }
+                catch (error) { if (error !== "Key not found") throw error; }
+                const current = parseConfigFile(source, path);
+                const config = normalizeWorkspaceLLMConfig(current);
+                if (Object.keys(config).some(key => current[key] !== config[key]) ||
+                    Object.keys(current).some(key => !Object.hasOwn(config, key))) {
+                    // Normalize the latest settings atomically, retaining unrelated configuration sections.
+                    return normalizeLLMConfig(JSON.parse(await update()));
+                }
+                return normalizeLLMConfig(config);
+            },
+            async write(changes) {
+                return normalizeLLMConfig(JSON.parse(await update(changes, true)));
+            }
+        };
+    }
+
+    function createSessionKeyStore(scope, fallback) {
+        return (host, value) => {
+            if (typeof host !== "string" || (value !== undefined && typeof value !== "string")) {
+                throw new Error("Invalid model credentials.");
+            }
+            const key = "project-chat.key:" + JSON.stringify([scope, host]);
+            if (value === undefined) {
+                if (fallback?.has(key)) return fallback.get(key);
+                try { return sessionStorage.getItem(key) || ""; } catch { return ""; }
+            }
+            try {
+                if (value) sessionStorage.setItem(key, value);
+                else sessionStorage.removeItem(key);
+                fallback?.delete(key);
+                return true;
+            } catch {
+                fallback?.set(key, value);
+                return Boolean(fallback);
+            }
+        };
+    }
+
+    function renderModelProgress(container, state) {
+        const message = state?.message;
+        container.hidden = !message;
+        if (!message) return;
+        const status = container.querySelector("[role=status]");
+        if (status.textContent !== message) status.textContent = message;
+        const progress = container.querySelector("progress");
+        if (state.total > 0) {
+            progress.max = state.total;
+            progress.value = state.loaded;
+        } else progress.removeAttribute("value");
+    }
+
     function requestOptions(config) {
         const settings = { thinking: config.thinking, timeoutMs: config.requestTimeoutMs };
         return config.chatProvider === 'browser'
@@ -399,7 +497,8 @@ globalThis.llmClient = (() => {
         };
     }
 
-    return { create, requestOptions, normalizeConfig: normalizeLLMConfig,
+    return { create, requestOptions, normalizeConfig: normalizeLLMConfig, createConfigStore, parseConfigFile,
+        createSessionKeyStore, renderModelProgress,
         validateApiKey: llmEndpointKey, isRetiredEndpoint, defaultOllamaPort: DEFAULT_OLLAMA_PORT };
 })();
 

@@ -1,31 +1,9 @@
 "use strict";
 
-function createChatApiKeyStore(scope, fallback) {
-	return (host, value) => {
-		if (typeof host !== "string" || (value !== undefined && typeof value !== "string")) {
-			throw new Error("Invalid model credentials.");
-		}
-		const key = "project-chat.key:" + JSON.stringify([scope, host]);
-		if (value === undefined) {
-			if (fallback?.has(key)) return fallback.get(key);
-			try { return sessionStorage.getItem(key) || ""; } catch { return ""; }
-		}
-		try {
-			if (value) sessionStorage.setItem(key, value);
-			else sessionStorage.removeItem(key);
-			fallback?.delete(key);
-			return true;
-		} catch {
-			fallback?.set(key, value);
-			return Boolean(fallback);
-		}
-	};
-}
-
 // Both exported apps and sandboxed previews use the host VFS, rooted in the app's own workspace.
 function createChatWorkspaceAccess(vfs, root, projects = root + "Projects/") {
 	// Preview documents are replaced on navigation. Keep credentials in the parent tab, scoped to this app.
-	const apiKey = createChatApiKeyStore(root, new Map());
+	const apiKey = llmClient.createSessionKeyStore(root, new Map());
 	function resolve(path) {
 		if (typeof path !== "string" || !path.startsWith("/") || /[\\\x00-\x1f\x7f]/.test(path) ||
 			path.split("/").some(part => part === "." || part === "..")) throw new Error("Invalid app workspace path.");

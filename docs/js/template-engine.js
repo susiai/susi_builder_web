@@ -2,6 +2,7 @@
 
 const templateEngine = (() => {
 	const siteRoot = new URL('../', document.currentScript.src);
+	const { chatModelAssets } = templateCatalog;
 	const blockAssets = [templateCatalog.dataAssets, templateCatalog.gameAssets, templateCatalog.notebookAssets];
 	const byId = (items, id, label) => {
 		const item = items.find(item => item.id === id);
@@ -26,6 +27,7 @@ const templateEngine = (() => {
 	function projectPackages(settings) {
 		const packages = [templateCatalog.base, byId(templateCatalog.designs, settings.design, 'design')];
 		for (const item of blockAssets) if (item.blocks.some(id => settings.blocks.includes(id))) packages.push(item);
+		if (settings.libraries.some(id => id === 'chat' || id === 'chat-workbench')) packages.push(chatModelAssets);
 		return packages.concat(templateCatalog.libraries.filter(item => settings.libraries.includes(item.id)));
 	}
 
@@ -185,15 +187,15 @@ const templateEngine = (() => {
 			'Edit index.html, css/app.css and js/app.js. The selected design and other styles are in css/.\n' +
 			'All resources use relative paths and are included locally.\n' +
 			(withChat ?
-				'Open Configuration to choose an OpenAI-compatible API host and a model ID. You can fetch the model list there.\n' +
-				'Preview allows API calls. The endpoint must allow the browser origin via CORS.\n' +
+				'Open Configuration to select a browser model with a WebGPU primary and WASM fallback, or an OpenAI-compatible API endpoint.\n' +
+				'Model settings include a test prompt and Ollama setup help. The endpoint must allow the browser origin via CORS.\n' +
 				'Preview saves chat-settings.json in the app folder. Standalone copies use the shared vfs database for this origin.\n' +
-				'API keys are never written to the app folder. If tab storage is unavailable, enter the key on the page that uses it.\n\n' :
+				'API keys stay in the current browser tab.\n\n' :
 				'The sample data and forms are a starting point; no remote service is configured.\n\n') +
 			(workbench ?
 				'Open ' + (withChat ? 'agent-chat.html' : 'index.html') + ' for the full Chat workbench. Configure its model in agent-chat-config.html.\n' +
 				'The workbench starts in the empty /Projects/ folder. Create more folders there for separate projects and histories.\n' +
-				'To embed the workbench, copy the scripts, styles and assets used by the generated chat page.\n' +
+				'To embed the workbench, copy the scripts, styles and assets used by the generated chat page, keeping their order.\n' +
 				'See js/workbench-start.js for the mount call, which accepts appId, modelHref and container.\n\n' : '') +
 			(settings.blocks.includes('project-notebook') ?
 				'Open the app with Play. The notebook reads and writes notes.md in this folder.\n' +
@@ -415,7 +417,7 @@ const templateEngine = (() => {
 			'project-notebook': 'Open notebook', 'workbench-panel': 'Open Chat Workbench' }[firstTarget] || 'Take a look';
 		const styles = ['css/base.css', design.css, 'css/app.css', ...pagePackages.flatMap(item => item.styles), ...libraries.flatMap(lib => lib.styles),
 			...(embeddedWorkbench ? ['css/chat-workbench.css', 'css/speech-dictation.css'] : [])];
-		const scripts = [...libraries.flatMap(lib => lib.scripts), ...pagePackages.flatMap(item => item.scripts),
+		const scripts = [...(chat || workbench ? chatModelAssets.scripts : []), ...libraries.flatMap(lib => lib.scripts), ...pagePackages.flatMap(item => item.scripts),
 			...(has('matter') ? ['js/physics.js'] : []), 'js/app.js',
 			...(embeddedWorkbench ? ['js/susi-chat.js', 'js/workbench-start.js'] : [])];
 		return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n' +
@@ -434,8 +436,13 @@ const templateEngine = (() => {
 			'<footer>' + (chatPurpose ? '' : '<p>Sample content. A starting point for something of your own.</p>') +
 			(libraries.length ? '<ul class="library-list" aria-label="Included libraries">' + libraries.map(lib => `<li>${escapeHTML(lib.name)} ${escapeHTML(lib.version)}</li>`).join('') + '</ul>' : '') +
 			'<p id="starter-status" role="status"></p></footer>\n' +
-			scripts.map(path => `<script src="${path}" defer${['js/vfs.js', 'js/susi-chat.js'].includes(path) ? ' data-vfs-standalone' : ''}></script>`).join('\n') +
+			scriptTags(scripts) +
 			'\n</body>\n</html>\n';
+	}
+
+	function scriptTags(paths) {
+		return paths.map(path => `<script defer src="${path}"${['js/vfs.js', 'js/susi-chat.js'].includes(path) ? ' data-vfs-standalone' : ''}></script>`)
+			.join('\n');
 	}
 
 	function makeTemplateWorkbench({ name, appId }, design, showAppLink) {
@@ -449,8 +456,7 @@ const templateEngine = (() => {
 	<link rel="stylesheet" href="${design.css}" />
 	<link rel="stylesheet" href="css/chat-workbench.css" />
 	<link rel="stylesheet" href="css/speech-dictation.css" />
-	<script defer src="js/susi-chat.js" data-vfs-standalone></script>
-	<script defer src="js/workbench-start.js"></script>
+	${scriptTags([...chatModelAssets.scripts, 'js/susi-chat.js', 'js/workbench-start.js'])}
 </head>
 <body id="chat-page" data-app-id="${appId}">
 	${showAppLink ? '<nav class="workbench-nav" aria-label="App"><a href="index.html">App home</a></nav>' : ''}
@@ -471,42 +477,18 @@ const templateEngine = (() => {
 	<link rel="stylesheet" href="${design.css}" />
 	<link rel="stylesheet" href="css/app.css" />
 	<link rel="stylesheet" href="css/chat.css" />
-	${workbenchPage ? '<script defer src="js/susi-chat.js" data-vfs-standalone></script>' :
-			'<script defer src="js/vfs.js" data-vfs-standalone></script>\n\t<script defer src="js/llm-client.js"></script>'}
-	<script defer src="js/chat.js"></script>
+	<link rel="stylesheet" href="css/chat-model-settings.css" />
+	${scriptTags([...chatModelAssets.scripts, workbenchPage ? 'js/susi-chat.js' : 'js/vfs.js',
+		'js/chat-model-settings.js', 'js/chat.js'])}
 </head>
 <body data-purpose="chat" data-app-id="${appId}"${workbenchPage ? ' data-chat-workspace' : ''}>
 	<nav class="project-nav" aria-label="App"><strong>${escapeHTML(name)}</strong><a href="${workbenchPage || 'index.html'}">Back to chat</a></nav>
 	<header class="project-header"><h1>Configuration</h1></header>
 	<div id="layout">
 		<main>
-			<section id="chat-configuration" aria-labelledby="chat-config-title">
+			<section aria-labelledby="chat-config-title">
 				<h2 id="chat-config-title">Model settings</h2>
-				<p>Use an OpenAI-compatible endpoint such as Ollama.</p>
-				<form id="chat-config-form">
-					<fieldset disabled>
-						<label for="chat-host">API host</label>
-						<input id="chat-host" type="url" spellcheck="false" required />
-						<label for="chat-api-key">API key (optional)</label>
-						<input id="chat-api-key" type="password" autocomplete="off" spellcheck="false" aria-describedby="chat-key-help" />
-						<small id="chat-key-help">The key is used for this host in the current browser tab.</small>
-						<label for="chat-model">Model ID</label>
-						<input id="chat-model" type="text" spellcheck="false" required />
-						<label for="chat-prompt">System prompt</label>
-						<textarea id="chat-prompt" rows="4"></textarea>
-						<label for="chat-timeout">Request idle timeout (seconds)</label>
-						<input id="chat-timeout" type="number" min="10" max="600" step="1" required />
-						<label id="chat-thinking-label"><input id="chat-thinking" type="checkbox" /> Enable model thinking</label>
-						<button type="submit">Save settings</button>
-					</fieldset>
-				</form>
-				<div>
-					<h3>Available models</h3>
-					<label for="chat-models">Choose a model to fill in its ID</label>
-					<select id="chat-models" disabled><option value="">Fetch available models first</option></select>
-					<button id="chat-fetch-models" type="button" disabled>Fetch models</button>
-				</div>
-				<p id="chat-config-status" role="status">Loading settings…</p>
+				<div id="chat-model-settings"></div>
 			</section>
 		</main>
 	</div>

@@ -8,16 +8,17 @@
 		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
 		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
 		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
-		<link rel="stylesheet" href="css/skill-creator.css?v=189da736" />
+		<link rel="stylesheet" href="css/skill-creator.css?v=9eab1ec1" />
 		<script defer src="js/vfs.js?v=042c0bb7"></script>
 		<script defer src="js/page-settings.js?v=60de7c53"></script>
 		<script defer src="js/skills.js?v=c42ccf4f"></script>
 		<script defer src="js/webfetch.js?v=c50d56e3"></script>
-		<script defer src="js/llm-client.js?v=7d0f3bce"></script>
-		<script defer src="js/llm.js?v=46bf5719"></script>
+		<script defer src="js/llm-client.js?v=5f33bd30"></script>
+		<script defer src="js/llm.js?v=0be8a99f"></script>
 		<script defer src="js/transformer-model-assets.js?v=9de616b6"></script>
-		<script defer src="js/llm-local.js?v=e3b0a92d"></script>
-		<script defer src="js/skill-creator.js?v=061a62ef"></script>
+		<script defer src="js/llm-local.js?v=9b513e41"></script>
+		<script defer src="js/browser-tab-capture.js?v=f937b218"></script>
+		<script defer src="js/skill-creator.js?v=458621f5"></script>
 		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
 	</head>
 	<body id="skill-creator-page">
@@ -47,15 +48,23 @@
 					<form id="skill-source-form">
 						<label for="skill-source-url">Web page URL</label>
 						<input id="skill-source-url" type="url" placeholder="https://example.com/guide"
-							aria-describedby="skill-source-help" required />
-						<p id="skill-source-help">SUSI Builder reads the page and uses your configured model to turn its text into a skill.</p>
-						<p id="skill-reader-setup" hidden>For pages that need a rendering browser, run
-							<strong>Start Skill Creator.command</strong> from the SUSI Builder folder.</p>
+							aria-describedby="skill-source-help" />
+						<p id="skill-source-help">Generate from a URL or capture an open tab. The URL is optional for screenshots.</p>
 						<div class="skill-creator-actions">
 							<button id="skill-generate" type="submit" disabled>Generate from URL</button>
+							<button id="skill-capture" type="button" aria-describedby="skill-capture-help" disabled>Capture tab</button>
 							<button id="skill-cancel" type="button" hidden>Cancel</button>
 						</div>
+						<p id="skill-capture-help">Capture the visible part of an open tab. Generating from a screenshot requires a vision-capable API model.</p>
 						<p id="skill-source-status" role="status" data-vfs-open-status>Opening the workspace…</p>
+						<div id="skill-screenshot-preview" hidden>
+							<img id="skill-screenshot-image" alt="Captured browser tab for review" />
+							<p>Review this image before sending it to your configured model.</p>
+							<div class="skill-creator-actions">
+								<button id="skill-generate-screenshot" type="submit" disabled>Generate from screenshot</button>
+								<button id="skill-discard-screenshot" type="button">Discard screenshot</button>
+							</div>
+						</div>
 					</form>
 					<details id="skill-prompt-settings" open>
 						<summary>Generation prompts</summary>

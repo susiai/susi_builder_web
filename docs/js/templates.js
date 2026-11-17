@@ -75,7 +75,8 @@
 		text.append(title);
 		if (library.summary) {
 			const summary = document.createElement('small');
-			summary.textContent = `${library.summary} · ${size(library.bytes)}`;
+			const bytes = library.bytes + (group === 'chat-library' ? templateCatalog.chatModelAssets.bytes : 0);
+			summary.textContent = `${library.summary} · ${size(bytes)}`;
 			text.append(summary);
 		}
 		label.append(input, text);

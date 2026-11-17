@@ -7,6 +7,7 @@
 	const pinnedSection = document.getElementById("pinned-apps");
 	const open = document.getElementById("project-new");
 	const newTile = open?.closest("li");
+	const deleteDialog = document.getElementById("app-delete-dialog");
 	const decoder = new TextDecoder("utf-8", { fatal: true });
 	const artworkTypes = [
 		["app.svg", "image/svg+xml"],
@@ -38,7 +39,23 @@
 			pin.setAttribute("aria-label", "Pin to Home");
 			pin.addEventListener("click", () => togglePin(project, pin));
 			tile.pin = pin;
-			header.append(pin);
+
+			const remove = document.createElement("button");
+			remove.type = "button";
+			remove.className = "app-delete";
+			remove.dataset.deleteApp = project;
+			remove.title = "Delete app";
+			remove.setAttribute("aria-label", `Delete ${project}`);
+			const icon = document.createElement("img");
+			icon.alt = "";
+			icon.src = "icons/action-edit-delete.svg";
+			icon.width = icon.height = 18;
+			remove.append(icon);
+
+			const controls = document.createElement("div");
+			controls.className = "app-tile-controls";
+			controls.append(pin, remove);
+			header.append(controls);
 		}
 
 		const view = createProjectPreviewLink(project);
@@ -231,6 +248,53 @@
 		open.disabled = false;
 	}
 
+	function enableAppDeletion() {
+		const form = document.getElementById("app-delete-form");
+		const path = document.getElementById("app-delete-path");
+		const errorMessage = document.getElementById("app-delete-error");
+		const cancel = document.getElementById("app-delete-cancel");
+		const confirm = document.getElementById("app-delete-confirm");
+		let project;
+		let deleting = false;
+
+		list.addEventListener("click", event => {
+			const button = event.target.closest("button[data-delete-app]");
+			if (!button || deleteDialog.open || deleting || vfs.wasReset) return;
+			project = path.textContent = button.dataset.deleteApp;
+			errorMessage.hidden = true;
+			deleteDialog.showModal();
+		});
+		cancel.addEventListener("click", () => deleteDialog.close());
+		deleteDialog.addEventListener("cancel", event => {
+			if (deleting) event.preventDefault();
+		});
+		form.addEventListener("submit", async event => {
+			event.preventDefault();
+			if (!deleteDialog.open || deleting || vfs.wasReset) return;
+			const target = project;
+			deleting = cancel.disabled = confirm.disabled = true;
+			errorMessage.hidden = true;
+			try {
+				await vfs.deleteTree(target);
+			} catch (error) {
+				errorMessage.textContent = `Could not delete the app. ${error?.message || error}`;
+				errorMessage.hidden = false;
+				return;
+			} finally {
+				deleting = cancel.disabled = confirm.disabled = false;
+			}
+			deleteDialog.close();
+			if (vfs.wasReset) return;
+			try {
+				await refresh();
+				notice(`Deleted ${target}.`);
+			} catch (error) {
+				notice(`Deleted ${target}. Could not refresh the app list. ${error?.message || error}`, true);
+			}
+			if (document.activeElement === document.body) open.focus();
+		});
+	}
+
 	try {
 		vfs = await window.vfsReady;
 		window.addEventListener("vfs-reset", event => {
@@ -244,10 +308,12 @@
 			list.setAttribute("aria-busy", "false");
 			if (open) open.disabled = true;
 			document.getElementById("project-dialog")?.close();
+			deleteDialog?.close();
 			notice("Workspace cleared. Reload to start a fresh workspace.");
 		});
 		await refresh();
 		if (open && !vfs.wasReset) enableAppCreation();
+		if (deleteDialog && !vfs.wasReset) enableAppDeletion();
 		const refreshApps = () => {
 			if (!creating && !vfs.wasReset) refresh().catch(error => notice(error.message || String(error), true));
 		};

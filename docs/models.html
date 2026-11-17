@@ -8,178 +8,16 @@
 		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
 		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
 		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
+		<link rel="stylesheet" href="css/chat-model-settings.css?v=add78dbf" />
 		<style>
-			#models-layout {
-				display: grid;
-				grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-				align-items: start;
-				gap: var(--panel-padding);
-			}
-
-			#llm-config-form { margin: 0; }
-			#chat-model-config, #model-list { display: grid; gap: 0.85rem; min-width: 0; }
-
-			.model-fields {
-				display: grid;
-				grid-template-columns: repeat(auto-fit, minmax(min(100%, 11.5rem), 1fr));
-				align-items: end;
-				gap: 0.9rem;
-			}
-
-			.model-key-entry {
-				display: grid;
-				grid-template-columns: minmax(0, 1fr) auto;
-				gap: 0.5rem;
-			}
-
-			.model-actions {
-				display: flex;
-				flex-wrap: wrap;
-				align-items: center;
-				gap: 0.6rem;
-			}
-
-			#chat-model-config > fieldset,
 			:is(#speech-form, #speech-output-form) > fieldset {
 				min-inline-size: 0;
+				margin-block-end: 1.25rem;
 				border: 1px solid var(--color-border);
 				border-radius: var(--radius);
 			}
-
-			:is(#speech-form, #speech-output-form) > fieldset { margin-block-end: 1.25rem; }
-			#chat-model-config > fieldset { margin: 0; }
-			#chat-api-settings label:not(:first-of-type) { margin-block-start: 0.85rem; }
-
-			#model-list {
-				padding: clamp(0.75rem, 1.7vw, 1.25rem);
-				border: 1px solid var(--color-line);
-				border-top-color: var(--color-border);
-				border-radius: var(--radius);
-				background: var(--color-surface-inset);
-			}
-
-			#model-list > header { justify-content: space-between; }
-			#model-list h3, #model-list > p, #chat-model-actions > p { margin: 0; }
-			#api-key-help { margin: 0.4rem 0 0; }
-
-			:is(#api-key-help, #browser-model-help, #model-status, #chat-model-settings-status,
-				#model-test-help, #model-test-status) {
-				color: var(--color-muted);
-				font-size: 0.85rem;
-				overflow-wrap: anywhere;
-			}
-
-			:is(#chat-model-settings-status, #model-status, #model-test-status, #speech-status,
-				#speech-output-status)[data-error] { color: var(--color-accent-detail); }
-			:is(#chat-model-settings-status, #model-status, #model-test-status):empty { display: none; }
-
-			#model-choices:not([hidden]) {
-				display: grid;
-				gap: 0.85rem;
-			}
-
-			#model-choices:has(> ul) {
-				max-height: 21rem;
-				overflow-y: auto;
-				scrollbar-gutter: stable;
-				padding-inline-end: 0.2rem;
-			}
-
-			#model-choices fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
-			#model-choices legend { margin-block-end: 0.35rem; padding: 0; font-size: 0.85rem; color: var(--color-muted); }
-			#model-choices ul { display: grid; gap: 0.35rem; margin: 0; padding: 0; list-style: none; }
-			#model-choices fieldset ul { grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); }
-			#model-choices li { margin: 0; }
-
-			#model-choices label {
-				display: grid;
-				grid-template-columns: 1rem minmax(0, 1fr);
-				align-items: center;
-				gap: 0.65rem;
-				margin: 0;
-				padding: 0.4rem 0.6rem;
-				border: 1px solid var(--color-line);
-				border-radius: var(--radius);
-				background: var(--color-background-box);
-				overflow-wrap: anywhere;
-				cursor: pointer;
-			}
-
-			#model-choices label:has(:checked) {
-				border-color: var(--color-primary);
-				background: var(--color-accent-soft);
-			}
-
-			#model-choices label:focus-within { outline: 1px solid var(--color-signal); outline-offset: -2px; }
-			#model-choices input { width: 1rem; height: 1rem; margin: 0; }
-			#model-choices small { display: block; color: var(--color-muted); font-weight: 400; }
-			#chat-model-actions { margin-block-start: 1rem; }
-
-			#model-test {
-				margin-block-start: var(--panel-padding);
-				padding-block-start: var(--panel-padding);
-				border-top: 1px solid var(--color-line);
-			}
-
-			#model-test h3 { margin: 0 0 0.35rem; }
-			#model-test form {
-				display: grid;
-				grid-template-columns: minmax(0, 1fr) auto;
-				gap: 0.75rem;
-				align-items: end;
-				margin: 0;
-			}
-
-			#model-test-status, #model-test-reply { margin: 0.85rem 0 0; }
-			#model-test-reply {
-				max-height: 18rem;
-				padding: 0.75rem 0.9rem;
-				border: 1px solid var(--color-line);
-				border-inline-start: 2px solid var(--color-primary);
-				background: var(--color-surface-inset);
-				white-space: pre-wrap;
-				overflow-wrap: anywhere;
-			}
-
-			#api-key-clear, #refresh-models, #model-test-cancel {
-				border-color: var(--color-border);
-				background: var(--color-surface-raised);
-				color: var(--color-foreground);
-			}
-
-			#api-key-clear, #refresh-models { padding: 0.35rem 0.7rem; font-size: 0.83rem; }
-			:is(#api-key-clear, #refresh-models, #model-test-cancel):hover { border-color: var(--color-primary); }
+			:is(#speech-status, #speech-output-status)[data-error] { color: var(--color-accent-detail); }
 			:is(#speech-progress, #speech-output-progress) { width: 100%; accent-color: var(--color-primary); }
-
-			@media (max-width: 52rem) {
-				#models-layout, #model-test form { grid-template-columns: minmax(0, 1fr); }
-			}
-
-			#thinking-option {
-				display: flex;
-				align-items: center;
-				gap: 0.55rem;
-				width: fit-content;
-				margin: 0;
-				cursor: pointer;
-			}
-
-			#thinking {
-				width: 1rem;
-				height: 1rem;
-				margin: 0;
-			}
-
-			#ollama-setup > p { margin: 0; color: var(--color-muted); }
-			#ollama-setup ul { padding-inline-start: 1.2rem; }
-			#ollama-setup > ul > li { margin-block: 0.75rem; }
-			#ollama-setup > ul > li:last-child { margin-block-end: 0; }
-			#ollama-setup pre {
-				margin-block: 0.6rem;
-				padding: 0.55rem 0.75rem;
-				white-space: pre-wrap;
-				overflow-wrap: anywhere;
-			}
 		</style>
 		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
 	</head>
@@ -194,111 +32,7 @@
 			<main>
 				<section aria-labelledby="chat-model-title">
 					<h2 id="chat-model-title">Chat model</h2>
-					<form id="llm-config-form">
-						<div id="models-layout">
-							<div id="chat-model-config">
-								<fieldset id="chat-provider-options" disabled>
-									<legend>Inference method</legend>
-									<div class="model-fields">
-										<label><input type="radio" name="chat-provider" value="browser" checked /> Browser model</label>
-										<label><input type="radio" name="chat-provider" value="api" /> API endpoint</label>
-									</div>
-								</fieldset>
-								<fieldset id="chat-api-settings" hidden disabled>
-									<legend>Model endpoint</legend>
-									<label for="apihost">API host</label>
-									<input id="apihost" name="apihost" type="url" placeholder="http://localhost:11434" required />
-									<label for="api-key">API key (optional)</label>
-									<div class="model-key-entry">
-										<input id="api-key" type="password" autocomplete="off" spellcheck="false"
-											aria-describedby="api-key-help" />
-										<button id="api-key-clear" type="button" title="Forget this endpoint's key">Forget key</button>
-									</div>
-									<p id="api-key-help">Saved keys stay in this tab. Use HTTPS for remote providers.</p>
-								</fieldset>
-								<div>
-									<label for="systemprompt">System prompt</label>
-									<textarea id="systemprompt" name="systemprompt" rows="4"></textarea>
-								</div>
-								<div class="model-fields">
-									<div>
-										<label for="request-timeout">Idle timeout (seconds)</label>
-										<input id="request-timeout" type="number" min="10" max="600" step="1" required value="120" />
-									</div>
-									<label id="thinking-option" for="thinking">
-										<input id="thinking" name="thinking" type="checkbox" checked /> Allow thinking
-									</label>
-								</div>
-							</div>
-							<section id="model-list" aria-labelledby="model-list-title">
-								<header class="model-actions">
-									<h3 id="model-list-title">Available models</h3>
-									<button type="button" id="refresh-models" hidden disabled>Refresh list</button>
-								</header>
-								<p id="browser-model-help">WebGPU runs first, with WASM as a fallback. Model files download as needed.</p>
-								<p id="model-status" role="status"></p>
-								<div id="ollama-setup" hidden>
-									<p>Ollama is the recommended API option for running larger models locally.</p>
-									<ul>
-										<li><strong>Install Ollama.</strong> Get the desktop app for your system from
-											<a href="https://ollama.com/download" target="_blank" rel="noopener">ollama.com</a>.</li>
-										<li><strong>Allow browser connections on macOS.</strong> Run this in Terminal, then
-											quit Ollama and reopen it.
-											<pre><code>launchctl setenv OLLAMA_ORIGINS "*"</code></pre>
-										</li>
-										<li><strong>Allow browser connections on Windows.</strong> Quit Ollama from the system tray,
-											open <em>Edit environment variables for your account</em>, and create a user variable
-											named <code>OLLAMA_ORIGINS</code> with the value <code>*</code>. Reopen Ollama from the
-											Start menu. <a href="https://objectgraph.com/blog/ollama-cors/#on-windows"
-												target="_blank" rel="noopener">Windows walkthrough</a></li>
-										<li><strong>Download a model.</strong> Run one of these commands in Terminal or PowerShell.
-											<ul>
-												<li><code>ollama pull lfm3:1.7b-q4_K_M</code></li>
-												<li><code>ollama pull gemma4:e4b-it-qat</code></li>
-												<li><code>ollama pull gemma4:12b-it-qat</code></li>
-												<li><code>ollama pull qwen3.6:35b-a3b-q4_K_M</code></li>
-												<li><code>ollama pull qwen3.8:27b-mtp-q4_K_M</code></li>
-												<li><code>ollama pull inkling-2-mini:26b-a5b</code></li>
-											</ul>
-										</li>
-										<li><strong>Connect SUSI Builder.</strong><br />
-											Type <code>http://localhost:11434</code> into the <strong>API host</strong> field.<br />
-											Leave the API key blank and choose <strong>Check connection</strong>.</li>
-									</ul>
-								</div>
-								<div id="api-model-entry" hidden>
-									<label for="model-id">Model ID</label>
-									<input id="model-id" autocomplete="off" spellcheck="false" placeholder="Choose or enter a model ID" />
-								</div>
-								<div id="model-choices" hidden></div>
-								<div id="models-local-progress" class="model-loading" hidden>
-									<progress aria-label="Browser model preparation"></progress>
-									<span role="status"></span>
-								</div>
-							</section>
-						</div>
-						<div class="model-actions" id="chat-model-actions">
-							<button id="save-chat-model" type="submit" disabled>Save settings</button>
-							<p id="chat-model-settings-status" data-vfs-open-status role="status">Opening the workspace…</p>
-						</div>
-					</form>
-					<section id="model-test" aria-labelledby="model-test-title">
-						<h3 id="model-test-title">Test model</h3>
-						<p id="model-test-help">Test the current settings here. Save settings to use them in Chat.</p>
-						<form id="model-test-form">
-							<div>
-								<label for="model-test-prompt">Test prompt</label>
-								<input id="model-test-prompt" required maxlength="4000" aria-describedby="model-test-help"
-										value="Reply with the word Ready." />
-							</div>
-							<div class="model-actions">
-								<button id="model-test-run" type="submit" disabled>Run test</button>
-								<button id="model-test-cancel" type="button" hidden>Stop test</button>
-							</div>
-						</form>
-						<p id="model-test-status" role="status"></p>
-						<pre id="model-test-reply" aria-label="Test reply" tabindex="0" hidden></pre>
-					</section>
+					<div id="chat-model-settings"></div>
 				</section>
 				<section id="speech-to-text" aria-labelledby="speech-title">
 					<h2 id="speech-title"><img src="icons/device-audio-input-microphone.svg" alt="" /> Speech to text</h2>
@@ -446,17 +180,23 @@
 			</main>
 		</div>
 
-		<script src="js/llm-client.js?v=7d0f3bce"></script>
+		<script src="js/llm-client.js?v=5f33bd30"></script>
 		<script src="js/skills.js?v=c42ccf4f"></script>
 		<script src="js/file-search.js?v=80072ff5"></script>
 		<script src="js/webfetch.js?v=c50d56e3"></script>
-		<script src="js/llm.js?v=46bf5719"></script>
+		<script src="js/llm.js?v=0be8a99f"></script>
 		<script src="js/vfs.js?v=042c0bb7"></script>
 		<script src="js/page-settings.js?v=60de7c53"></script>
 		<script src="js/transformer-model-assets.js?v=9de616b6"></script>
-		<script src="js/llm-local.js?v=e3b0a92d"></script>
+		<script src="js/llm-local.js?v=9b513e41"></script>
 		<script src="js/stt.js?v=91cb9caf"></script>
 		<script src="js/tts.js?v=123a3be2"></script>
-		<script src="js/models.js?v=04a603c5"></script>
+		<script src="js/chat-model-settings.js?v=d96d9655"></script>
+		<script src="js/models.js?v=3d2fd9e5"></script>
+		<script>
+			mountChatModelSettings(document.getElementById("chat-model-settings"), {
+				readConfig: readLLMConfig, writeConfig: writeLLMConfig, readKey: readLLMApiKey, writeKey: writeLLMApiKey
+			});
+		</script>
 	</body>
 </html>

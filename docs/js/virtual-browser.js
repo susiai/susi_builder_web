@@ -26,6 +26,7 @@
 
 	async function navigate(path) {
 		try {
+			llmLocal.close();
 			await preview.open(path);
 			frame.hidden = false;
 			notice.hidden = true;
@@ -42,13 +43,23 @@
 		if (!entries.some(entry => entry.path === "index.html")) throw new Error("This VFS folder has no index.html.");
 		const project = folder !== "/" && !folder.startsWith("/.webstation/");
 		const workbench = project && entries.some(({ path }) => path === "js/susi-chat.js" || path === "js/webstation-chat.js");
+		const browserChat = project && entries.some(({ path }) => path === "js/llm-local.js");
+		const workspace = workbench ? createChatWorkspaceAccess(vfs, folder + ".chat-workspace/", folder + "Projects/") : undefined;
+		const apiKey = llmClient.createSessionKeyStore(folder, new Map());
 		const snapshot = await prepareVfsPreview(workbench
 			? entries.filter(entry => !entry.path.startsWith(".chat-workspace/"))
 			: entries);
 		preview = createVfsPreview(frame, snapshot, {
 			onNavigate: navigate, onError: showError, allowRemoteResources: true,
 			projectFiles: project ? createPreviewProjectFiles(vfs, folder) : undefined,
-			projectWorkspace: workbench ? createChatWorkspaceAccess(vfs, folder + ".chat-workspace/", folder + "Projects/") : undefined
+			projectWorkspace: workspace ?? (browserChat ? (name, args) => {
+				if (Array.isArray(args)) {
+					if (name === "readApiKey" && args.length === 1) return apiKey(args[0]);
+					if (name === "writeApiKey" && args.length === 2) return apiKey(...args);
+				}
+				throw new Error("Invalid Chat settings operation.");
+			} : undefined),
+			localModel: browserChat ? llmLocal.previewRequest : undefined
 		});
 		await navigate("/index.html");
 	} catch (error) {

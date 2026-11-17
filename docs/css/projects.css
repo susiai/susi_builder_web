@@ -57,16 +57,24 @@
 	overflow-wrap: anywhere;
 }
 
-.app-pin {
+.app-tile-controls {
+	display: flex;
+	gap: 0.25rem;
+}
+
+:is(.app-pin, .app-delete) {
 	display: grid;
-	flex: 0 0 2rem;
 	place-items: center;
+	width: 2rem;
 	height: 2rem;
 	padding: 0;
 	border: 1px solid var(--color-border);
 	border-radius: 0;
 	background: var(--color-surface-inset);
 	color: var(--color-text);
+}
+
+.app-pin {
 	font: 1.25rem/1 system-ui, sans-serif;
 }
 
@@ -87,6 +95,11 @@
 .app-pin[aria-disabled="true"] {
 	opacity: 0.65;
 	cursor: wait;
+}
+
+.app-delete:is(:hover, :focus-visible) {
+	border-color: var(--color-accent-detail);
+	background: var(--color-surface-inset);
 }
 
 #pinned-apps {
@@ -230,7 +243,7 @@
 	margin: 0;
 }
 
-#project-dialog {
+:is(#project-dialog, #app-delete-dialog) {
 	width: min(28rem, 100% - 2rem);
 	padding: var(--panel-padding);
 	border: 1px solid var(--color-border);
@@ -239,11 +252,11 @@
 	color: var(--color-foreground);
 }
 
-#project-dialog::backdrop {
+:is(#project-dialog, #app-delete-dialog)::backdrop {
 	background: rgb(8 10 18 / 78%);
 }
 
-#project-form > div {
+:is(#project-form, #app-delete-form) > div {
 	display: flex;
 	justify-content: end;
 	flex-wrap: wrap;
@@ -251,7 +264,15 @@
 	margin-block-start: 1rem;
 }
 
+#app-delete-description { overflow-wrap: anywhere; }
+
+#app-delete-confirm {
+	border-color: var(--color-accent-detail);
+	background: var(--color-accent-detail);
+}
+
 #project-status[data-error],
-#project-error {
+#project-error,
+#app-delete-error {
 	color: var(--color-accent-detail);
 }

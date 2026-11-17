@@ -947,5 +947,41 @@ globalThis.llmLocal = (() => {
 		modelChannel = undefined;
 	});
 	window.addEventListener("vfs-reset", close);
-	return { models, defaultConfig, localConfig, modelPair, modelLabel, status, download, generate, close, requestPrimaryRetry };
+	const preview = window.susi?.localModel;
+	if (preview) {
+		// The preview is sandboxed. Its host runs the same worker against the host's model cache.
+		return { models, defaultConfig, localConfig, modelPair, modelLabel,
+			status: (options, { signal, onProgress } = {}) =>
+				preview("status", [options], signal, (name, value) => { if (name === "progress") onProgress?.(value); }),
+			generate: ({ signal, onToken, onStatus, onProgress, onRestart, ...options }) => {
+				const handlers = { token: onToken, status: onStatus, progress: onProgress, restart: onRestart };
+				return preview("generate", [options, Boolean(onRestart)], signal, (name, value) => handlers[name]?.(value));
+			},
+			close: () => { void preview("close", []).catch(() => {}); },
+			requestPrimaryRetry: (primary, fallback) => { void preview("retry", [primary, fallback]).catch(() => {}); }
+		};
+	}
+
+	function previewRequest(method, args, signal, emit) {
+		switch (method) {
+			case "status":
+				return status(args[0], { signal, onProgress: state => emit("progress", state) });
+			case "generate":
+				return generate({
+					...args[0], signal,
+					onToken: text => emit("token", text),
+					onStatus: text => emit("status", text),
+					onProgress: state => emit("progress", state),
+					onRestart: args[1] ? () => emit("restart") : undefined
+				});
+			case "retry":
+				return requestPrimaryRetry(args[0], args[1]);
+			case "close":
+				return close();
+			default:
+				throw new Error("Unknown browser model operation.");
+		}
+	}
+
+	return { models, defaultConfig, localConfig, modelPair, modelLabel, status, download, generate, close, requestPrimaryRetry, previewRequest };
 })();

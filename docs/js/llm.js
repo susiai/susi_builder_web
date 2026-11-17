@@ -838,90 +838,22 @@ function createLLM(options = {}) {
 }
 
 const LLM_CONFIG_PATH = "/config.json";
-const { normalizeConfig: normalizeLLMConfig, defaultOllamaPort: DEFAULT_OLLAMA_PORT } = llmClient;
+const { renderModelProgress } = llmClient;
 
 function parseLLMConfigFile(source, strict = false) {
-    try {
-        const config = JSON.parse(source === undefined ? "{}" : source);
-        if (!config || typeof config !== "object" || Array.isArray(config)) {
-            throw new Error("config.json must contain a JSON object.");
-        }
-        return config;
-    } catch (error) {
+    try { return llmClient.parseConfigFile(source, LLM_CONFIG_PATH); }
+    catch (error) {
         if (strict) throw error;
         return {};
     }
 }
 
-function normalizeWorkspaceLLMConfig(current, changes = {}) {
-    const updated = { ...current, ...changes };
-    if (llmClient.isRetiredEndpoint(updated.apihost)) {
-        Object.assign(updated, { apihost: "", model: "", chatProvider: globalThis.llmLocal ? "browser" : "api" });
-    }
-    const config = normalizeLLMConfig(updated);
-    if (!globalThis.llmLocal) return { ...current, ...config };
-
-    const { chatLocalModel, chatLocalDevice } = updated;
-    // Older workspaces with no selected model can use the same first-run setup.
-    if (!config.chatProvider && !config.model.trim() && config.apihost === `http://localhost:${DEFAULT_OLLAMA_PORT}`) {
-        config.chatProvider = llmLocal.defaultConfig.chatProvider;
-        config.thinking = llmLocal.defaultConfig.thinking;
-    }
-    if (config.chatProvider === "browser" || chatLocalModel !== undefined || chatLocalDevice !== undefined) {
-        Object.assign(config, llmLocal.localConfig({ ...config, chatLocalModel }));
-    }
-    const saved = { ...current, ...config };
-    delete saved.chatLocalModel;
-    delete saved.chatLocalDevice;
-    return saved;
-}
-
 async function writeLLMConfig(changes) {
-    const vfs = await window.vfsReady;
-    const saved = await vfs.update(LLM_CONFIG_PATH, (source) => {
-        const current = parseLLMConfigFile(source, true);
-        const next = normalizeWorkspaceLLMConfig(current, changes);
-        if (globalThis.llmLocal && next.chatProvider === "browser") {
-            llmLocal.modelPair(next.chatLocalPrimary, next.chatLocalFallback);
-        }
-        return JSON.stringify(next, null, 2);
-    });
-    return normalizeLLMConfig(JSON.parse(saved));
+    return llmClient.createConfigStore(await window.vfsReady, LLM_CONFIG_PATH).write(changes);
 }
 
 async function readLLMConfig() {
-    const vfs = await window.vfsReady;
-    let source;
-    try {
-        source = await vfs.getasync(LLM_CONFIG_PATH);
-    } catch (error) {
-        if (error !== "Key not found") throw error;
-    }
-    const storedConfig = parseLLMConfigFile(source, true);
-    const config = normalizeWorkspaceLLMConfig(storedConfig);
-    if (Object.keys(config).some(key => storedConfig[key] !== config[key]) ||
-        Object.keys(storedConfig).some(key => !Object.hasOwn(config, key))) {
-        // Normalize the latest settings atomically, retaining unrelated configuration sections.
-        const updated = await vfs.update(LLM_CONFIG_PATH, (latest) => {
-            const current = parseLLMConfigFile(latest, true);
-            return JSON.stringify(normalizeWorkspaceLLMConfig(current), null, 2);
-        });
-        return normalizeLLMConfig(JSON.parse(updated));
-    }
-    return normalizeLLMConfig(config);
-}
-
-function renderModelProgress(container, state) {
-    const message = state?.message;
-    container.hidden = !message;
-    if (!message) return;
-    const status = container.querySelector("[role=status]");
-    if (status.textContent !== message) status.textContent = message;
-    const progress = container.querySelector("progress");
-    if (state.total > 0) {
-        progress.max = state.total;
-        progress.value = state.loaded;
-    } else progress.removeAttribute("value");
+    return llmClient.createConfigStore(await window.vfsReady, LLM_CONFIG_PATH).read();
 }
 
 const DEFAULT_AGENT_MAX_TOOL_CALLS = 100;

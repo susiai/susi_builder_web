@@ -26,14 +26,15 @@ Layouts can use one column, an overview grid, or a sidebar.
 
 Choose the **Chat** purpose to preselect **Basic Chat**. The library can also be selected for other purposes
 under **Bring your tools**, alongside other libraries. It adds streaming replies and a separate **Configuration** page.
-Enter an OpenAI-compatible API host, then fetch its available models or enter a model ID. You can also set the system prompt,
-thinking option, and request idle timeout. The Create App preview uses sample replies.
+Choose a WebGPU model and WASM fallback, or enter an OpenAI-compatible API host and select or type a model ID.
+Configuration uses the same chat model panel as SUSI Builder, including Ollama setup, a test prompt, a system prompt,
+thinking controls, and the request idle timeout. The Create App preview uses sample replies.
 
-Open the generated project with **Preview app** to reach the model endpoint, including Ollama on localhost.
-The endpoint must accept requests from the browser origin. Model settings are saved
+Open the generated project with **Preview app** to use Builder's browser model cache or reach an API endpoint,
+including Ollama on localhost. An API endpoint must accept requests from the browser origin. Model settings are saved
 in `chat-settings.json` inside the VFS project. Standalone exports use the shared IndexedDB database `vfs` for their
 origin and store settings under `/.webstation/apps/<app-id>/`. The ID is generated with the app and included in the
-export. API keys stay in tab storage when available. In the sandbox, enter the key on the page that uses it.
+export. API keys stay in the current browser tab.
 
 ### Full Chat workbench
 
@@ -47,23 +48,22 @@ Edit the selected design stylesheet under `css/` to theme both the starter and t
 The workbench initially opens the empty `/Projects/` folder. Start right there or create a subfolder for a separate
 project and conversation. Folders can hold any files, including scripts or notes.
 
-To reuse it in another app, copy the bundle and local assets referenced by the generated Chat page. Load
-`js/susi-chat.js` with `data-vfs-standalone`, then call `susiChatApp.mount({ appId, modelHref, container })`
+To reuse it in another app, copy the scripts and local assets referenced by the generated Chat page. Keep their order
+and load `js/susi-chat.js` with `data-vfs-standalone`. Call `susiChatApp.mount({ appId, modelHref, container })`
 from a deferred script. Use the generated 32-character app ID to keep the app's data in its own workspace.
 Preview limits the workbench to its app directory. A standalone export uses the same IndexedDB database with
 an app-specific path. Enter model keys in Configuration. They stay in the current tab and are kept out of app files.
 
-Workspace-wide model and Browser controls live in SUSI Builder. The preview sandbox also limits
-microphone access and local speech workers. Configure the generated app's model separately.
+The generated app has its own model settings. Browser tools and speech settings are managed in SUSI Builder.
 
 ### Browser inference in a standalone app
 
-The shared `llm-client.js` also supports browser inference. A standalone app can load
-`transformer-model-assets.js` and `llm-local.js` alongside it, with the Transformers.js bundle in `js/vendor/`.
+Generated Chat apps include the shared `llm-client.js`, `transformer-model-assets.js`, `llm-local.js`, and the
+Transformers.js bundle in `js/vendor/`. To use the same client in your own app, load those scripts in that order.
 Pass `provider: "browser"`, `model: "qwen3-0.6b-webgpu"`, and `fallbackModel: "lfm2.5-350m-wasm"` to
 `streamChat()` or `completeChat()`. The worker prepares the selected builds as needed. See `llmLocal.models`
 for available combination IDs. To use a single device, install it with `llmLocal.download(vfs, model, device)`
-and pass `model` and `device` to the client. The generated app's Configuration form sets an API endpoint.
+and pass `model` and `device` to the client.
 
 ## VFS notebook
 

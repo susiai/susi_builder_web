@@ -19,7 +19,7 @@ const susiChatApp = (() => {
 		window.vfsReady = ready;
 		const apiKey = bridge ? (host, value) => value === undefined
 			? bridge("readApiKey", [host]) : bridge("writeApiKey", [host, value])
-			: createChatApiKeyStore(appId);
+			: llmClient.createSessionKeyStore(appId);
 		return workspace = { appId, ready, apiKey, readConfig: readLLMConfig, writeConfig: writeLLMConfig };
 	}
 

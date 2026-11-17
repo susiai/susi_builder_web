@@ -280,9 +280,9 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 			else button.removeAttribute("aria-current");
 		}
 		importPrevious.hidden = historyReadError || historyConflict || !activeProject || Boolean(turns.length) || !previousConversation.length;
-		document.getElementById("chat-empty-title").textContent = activeProject ? "Start a conversation" : "Choose a project";
+		document.getElementById("chat-empty-title").textContent = activeProject ? "Build your app by talking to it." : "Choose a project";
 		document.getElementById("chat-empty-description").textContent = activeProject
-			? "Messages and file changes belong to this project."
+			? "Say what you want to change, and Chat will update the project files."
 			: "Select a project or create one to start a conversation.";
 	}
 

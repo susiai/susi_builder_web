@@ -315,7 +315,7 @@ function startVfsPreview(id, origin, policy) {
 			meta: url => ({ url, resolve: value => resolve(value, url).href }),
 			install() {
 				window.fetch = requestFile;
-				if (snapshot.projectFiles || snapshot.projectWorkspace) {
+				if (snapshot.projectFiles || snapshot.projectWorkspace || snapshot.localModel) {
 					const calls = new Map();
 					let nextId = 0;
 					let closed = false;
@@ -332,13 +332,14 @@ function startVfsPreview(id, origin, policy) {
 						if (data.closed) { closeFiles(); return; }
 						const call = calls.get(data.id);
 						if (!call) return;
+						if (data.event) { call.onEvent?.(data.event, data.value); return; }
 						calls.delete(data.id);
 						call.cleanup();
 						if (data.missing) call.reject("Key not found");
 						else if (data.error) call.reject(Object.assign(new Error(data.error), { code: data.code }));
 						else call.resolve(data.file);
 					};
-					const request = (message, signal) => new Promise((resolve, reject) => {
+					const request = (message, signal, onEvent) => new Promise((resolve, reject) => {
 						if (closed) throw new DOMException("Project closed.", "AbortError");
 						signal?.throwIfAborted();
 						const id = ++nextId;
@@ -349,7 +350,7 @@ function startVfsPreview(id, origin, policy) {
 						};
 						host.postMessage({ id, ...message });
 						signal?.addEventListener("abort", abort, { once: true });
-						calls.set(id, { resolve, reject, cleanup: () => signal?.removeEventListener("abort", abort) });
+						calls.set(id, { resolve, reject, onEvent, cleanup: () => signal?.removeEventListener("abort", abort) });
 					});
 					// Older exported apps use the original name for the same scoped file API.
 					window.susi = window.webstation = {};
@@ -359,6 +360,8 @@ function startVfsPreview(id, origin, policy) {
 					};
 					if (snapshot.projectWorkspace) window.susi.workspace = (name, args, signal) =>
 						request({ method: "workspace", name, args }, signal);
+					if (snapshot.localModel) window.susi.localModel = (name, args, signal, onEvent) =>
+						request({ method: "local-model", name, args }, signal, onEvent);
 					window.addEventListener("pagehide", event => { if (!event.persisted) closeFiles(); });
 				} else host.close();
 				for (const level of ["warn", "error"]) {
@@ -440,7 +443,7 @@ function startVfsPreview(id, origin, policy) {
 }
 
 function createVfsPreview(frame, snapshot, {
-	onNavigate = () => {}, onError = () => {}, onDiagnostic = () => {}, allowRemoteResources = false, projectFiles, projectWorkspace
+	onNavigate = () => {}, onError = () => {}, onDiagnostic = () => {}, allowRemoteResources = false, projectFiles, projectWorkspace, localModel
 } = {}) {
 	let current;
 	let pending;
@@ -461,7 +464,7 @@ function createVfsPreview(frame, snapshot, {
 			const connection = port;
 			const { signal } = session;
 			const requests = new Map();
-			if (projectFiles || projectWorkspace) connection.onmessage = async ({ data }) => {
+			if (projectFiles || projectWorkspace || localModel) connection.onmessage = async ({ data }) => {
 				if (signal.aborted || !Number.isSafeInteger(data?.id)) return;
 				if (data.method === "cancel") { requests.get(data.id)?.abort(); return; }
 				if (requests.has(data.id)) return;
@@ -472,6 +475,10 @@ function createVfsPreview(frame, snapshot, {
 					let file;
 					if (data.method === "workspace" && projectWorkspace) {
 						file = await projectWorkspace(data.name, data.args, operation);
+					} else if (data.method === "local-model" && localModel && Array.isArray(data.args)) {
+						file = await localModel(data.name, data.args, operation, (event, value) => {
+							if (!operation.aborted) connection.postMessage({ id: data.id, event, value });
+						});
 					} else {
 						if (typeof data.path !== "string" || /[\\\x00-\x1f\x7f]/.test(data.path)) {
 							throw new Error("Invalid project file path.");
@@ -488,7 +495,8 @@ function createVfsPreview(frame, snapshot, {
 				} finally { requests.delete(data.id); }
 			};
 			connection.postMessage({
-				...snapshot, path: pending.path, projectFiles: Boolean(projectFiles), projectWorkspace: Boolean(projectWorkspace)
+				...snapshot, path: pending.path, projectFiles: Boolean(projectFiles),
+				projectWorkspace: Boolean(projectWorkspace), localModel: Boolean(localModel)
 			});
 		} else if (event.data.type === "rendered") settle(undefined, event.data.url);
 		else if (event.data.type === "error") { settle(new Error(event.data.message)); onError(event.data.message); }
