@@ -23,6 +23,7 @@ Speech-to-text and speech output are off until you configure them there.
 - **Create App** combines designs, layouts, components, and bundled libraries. Build a dashboard, chat app, notebook,
   data workspace, or game from a starter with a live preview. [Template guide](docs/templates/README.md)
 - **Chat** streams replies and gives the agent tools to read, search, and edit files in the selected app.
+  Paste or attach images and use LFM3-VL-2B on WebGPU or a vision-capable API model to read them.
   Attach text, PDF, XLSX, DOCX, PPTX, or audio files. Audio attachments use the selected speech-to-text model.
   Browser chat models run offline once downloaded to `/Models/Chat/`. Qwen3 0.6B and LFM2.5 350M support WebGPU
   and WASM. Qwen3 1.7B, Qwen3.5 2B, LFM2.5 1.2B Instruct, and LFM3 1.7B use WebGPU.

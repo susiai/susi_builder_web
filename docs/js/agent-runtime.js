@@ -135,8 +135,8 @@ async function runAgentLoop({ client, config, messages, tools, refreshTools, max
 			if (call.function.name === "browser_read" && output?.kind === "image") {
 				const { imageUrl, ...description } = output;
 				output = description;
-				if (inference.provider === "browser") {
-					output = "This browser model accepts text. Select a vision-capable API model to view shared screenshots.";
+				if (!llmClient.supportsImages(inference)) {
+					output = "This model accepts text. Select a vision-capable model to view shared screenshots.";
 				} else if (typeof imageUrl === "string" && imageUrl.length <= 350000 &&
 					/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(imageUrl)) {
 					frames.push({ type: "text", text: "User-shared tab image " + description.snapshot +

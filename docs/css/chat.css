@@ -896,6 +896,7 @@ html:has(#chat-page) {
 .chat-attachments {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: start;
 	gap: 0.35rem;
 	max-width: var(--chat-width);
 	margin: 0.45rem auto 0;
@@ -905,43 +906,72 @@ html:has(#chat-page) {
 }
 
 #chat-attachments {
-	max-height: 5.75rem;
+	max-height: 9.75rem;
 	overflow: auto;
 	margin: 0 auto 0.45rem;
 }
 
 .chat-attachments li {
-	display: flex;
-	align-items: center;
-	gap: 0.4rem;
+	position: relative;
+	display: grid;
+	grid-template-rows: 3.25rem auto;
+	gap: 0.2rem;
+	width: 4.5rem;
 	min-width: 0;
 	max-width: 100%;
-	padding: 0.15rem 0.45rem;
+	padding: 0.25rem;
 	border: 1px solid var(--color-border);
 	border-radius: 0.35rem;
 	background: var(--color-surface-inset);
 	color: var(--color-text);
-	font-size: 0.75rem;
-	overflow-wrap: anywhere;
+	font-size: 0.7rem;
+	line-height: 1.3;
 }
 
-.chat-attachments li img { width: 1.1rem; height: 1.1rem; flex: none; }
-.chat-attachments li span { min-width: 0; }
-
-.chat-attachments button {
+.chat-attachment-preview {
 	display: grid;
 	place-items: center;
-	flex: none;
-	min-width: 1.5rem;
-	min-height: 1.5rem;
-	padding: 0.15rem;
-	border: 0;
-	background: transparent;
+	min-width: 0;
+	min-height: 0;
 }
 
+.chat-attachment-preview img { width: 1.5rem; height: 1.5rem; }
+
+.chat-attachment-preview .chat-attachment-thumbnail {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.chat-attachment-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.chat-attachments button {
+	position: absolute;
+	inset-block-start: 0.15rem;
+	inset-inline-end: 0.15rem;
+	display: grid;
+	place-items: center;
+	min-width: 1.35rem;
+	min-height: 1.35rem;
+	padding: 0.15rem;
+	border: 1px solid var(--color-border);
+	background: var(--color-surface-inset);
+}
+
+.chat-attachments button img { width: 0.8rem; height: 0.8rem; }
 .chat-attachments button:hover { background: var(--color-surface-raised); }
 .chat-attachments button:focus-visible { outline-offset: -2px; }
-#chat-attachment-status { margin: 0.3rem auto 0; max-width: var(--chat-width); font-size: 0.78rem; text-align: start; }
+:is(#chat-attachment-status, #chat-image-model-notice) {
+	margin: 0.3rem auto 0;
+	max-width: var(--chat-width);
+	font-size: 0.78rem;
+	text-align: start;
+}
 #chat-attachment-status[data-error] { color: var(--color-accent-detail); }
 
 #chat-attachment-progress:not([hidden]) {

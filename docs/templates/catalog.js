@@ -40,7 +40,7 @@ globalThis.templateCatalog = {
       { "source": "docs/js/vendor/onnxruntime-ThirdPartyNotices.txt", "path": "js/vendor/onnxruntime-ThirdPartyNotices.txt" }
     ],
     "scripts": ["js/llm-client.js", "js/transformer-model-assets.js", "js/llm-local.js"],
-    "bytes": 1182680
+    "bytes": 1191292
   },
   "designs": [
     {
@@ -681,6 +681,7 @@ globalThis.templateCatalog = {
         {"source": "docs/icons/action-media-playback-stop.svg", "path": "icons/action-media-playback-stop.svg"},
         {"source": "docs/icons/status-audio-volume-medium.svg", "path": "icons/status-audio-volume-medium.svg"},
         {"source": "docs/icons/action-edit-delete.svg", "path": "icons/action-edit-delete.svg"},
+        {"source": "docs/icons/action-insert-image.svg", "path": "icons/action-insert-image.svg"},
         {"source": "docs/icons/mime-text-x-generic.svg", "path": "icons/mime-text-x-generic.svg"},
         {"source": "docs/icons/mime-audio-x-generic.svg", "path": "icons/mime-audio-x-generic.svg"},
         {"source": "docs/icons/mime-application-pdf.svg", "path": "icons/mime-application-pdf.svg"},
@@ -711,7 +712,7 @@ globalThis.templateCatalog = {
       ],
       "scripts": [],
       "styles": [],
-      "bytes": 10218698
+      "bytes": 10228475
     }
   ],
   "purposes": [

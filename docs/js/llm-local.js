@@ -107,6 +107,27 @@ globalThis.llmLocal = (() => {
 			]
 		},
 		{
+			id: "lfm3-vl-2b-webgpu", modelId: "lfm3-vl-2b", label: "LFM3-VL-2B",
+			detail: "Vision · text and images", device: "webgpu", shaderF16: true, vision: true, toolFormat: "xml",
+			dtype: { vision_encoder: "fp16", embed_tokens: "fp16", decoder_model_merged: "q4f16" },
+			repo: "onnx-community/LFM3-VL-2B-ONNX", revision: "d40cacd75af603679f80574054ab763d3ebd8f3b",
+			files: [
+				["config.json", 3421, "1940d512805a564f7b6ae1b896470d11eaf6770950ac3e32d279e84621775d31"],
+				["generation_config.json", 323, "30b1115bcdc4e5671567a5b1255a2f3d2f5a912a79292051c6f1e9db81b5e8c4"],
+				["chat_template.jinja", 12129, "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818"],
+				["processor_config.json", 1535, "d3d5c3f9dc3d3f25c3177ba8bb05938b53c51799244af1ca6406cde78924b84e"],
+				["preprocessor_config.json", 577, "867a27105d065821d30fa584af2cd3178c5458d4608c995e58511e3dc74fb84c"],
+				["tokenizer.json", 17908258, "a39eed58008cbcbc09e5b629b81338a654269c64cd13348aaa6090f4db75c7e7"],
+				["tokenizer_config.json", 14476, "0003700bc4c3fad69039fe5f5ddfff17945b54c13a1f6183486e4b88c59e46df"],
+				["onnx/decoder_model_merged_q4f16.onnx", 303156, "8428c97f1c72b0dee668560f6af5030bc20ec3e57b4130f934b5eed2d0950ac8"],
+				["onnx/decoder_model_merged_q4f16.onnx_data", 1036277760, "678e64d42eb43e70bf4c948df3f8c95f01f6eb9f3ef7bfb44d4909dc94731066"],
+				["onnx/embed_tokens_fp16.onnx", 637, "e77a6d740efc0da1ac3ed0245ff586b64680f810fbbd0acc1142d96c1a8325f6"],
+				["onnx/embed_tokens_fp16.onnx_data", 524288000, "6770d1af0a4e93b06b66635bf236d1bfa53ee1f7394eadc279b56c6ed0d6fc0c"],
+				["onnx/vision_encoder_fp16.onnx", 157822, "a16079cabb4d973591205ac36f25bbf3b1867e0c5101232f649985f833e32051"],
+				["onnx/vision_encoder_fp16.onnx_data", 378761216, "7c1fb02f4453f87940a9268b69a8137053ef1317255b08690d4e45a44d6eda80"]
+			]
+		},
+		{
 			id: "qwen3-0.6b-wasm", modelId: "qwen3-0.6b", label: "Qwen3 0.6B",
 			device: "wasm", dtype: "q4", cpuRuntime: true,
 			repo: "onnx-community/Qwen3-0.6B-ONNX-OPT", revision: "4799e655597b49210adb5c1ebe5b9d3bd04005a0",
@@ -182,6 +203,11 @@ globalThis.llmLocal = (() => {
 		const primary = modelForDevice(id, device);
 		if (!primary) throw new Error("Select a supported browser model and device.");
 		return { primary, key: primary.id };
+	}
+
+	function supportsImages({ model, device, fallbackModel }) {
+		const primaryDevice = device && device !== "auto" && fallbackModel === undefined ? device : "webgpu";
+		return modelForDevice(model, primaryDevice)?.vision === true;
 	}
 
 	const modelLabel = model => `${model.label} · ${model.device === "webgpu" ? "WebGPU" : "WASM"}`;
@@ -539,21 +565,21 @@ globalThis.llmLocal = (() => {
 
 	// Run in a Blob worker so the same bundle also starts from file://.
 	function runWorker(createReply, lfmToolFormat, xmlToolFormat) {
-		let tokenizer, model, TextStreamer, InterruptableStoppingCriteria, toolFormat;
+		let tokenizer, model, processor, RawImage, TextStreamer, InterruptableStoppingCriteria, toolFormat;
 		let chunkSize = 256;
 		self.onmessage = async ({ data }) => {
 			const { setup, messages, tools, thinking, temperature, stopTokens, maxTokens, stream, contextLimit } = data;
 			try {
 				if (setup) {
-					const { modules, wasm, files, id, root, device, dtype, bufferBytes, prefillChunkSize = 768 } = setup;
+					const { modules, wasm, files, id, root, device, dtype, vision, bufferBytes, prefillChunkSize = 768 } = setup;
 					if (setup.toolFormat === "lfm2") toolFormat = lfmToolFormat();
 					if (setup.toolFormat === "xml") toolFormat = xmlToolFormat();
 					const moduleURL = URL.createObjectURL(modules.transformers);
 					const factoryURL = URL.createObjectURL(modules.factory);
 					try {
 						const transformers = await import(moduleURL);
-						const { env, AutoTokenizer, AutoModelForCausalLM } = transformers;
-						({ TextStreamer, InterruptableStoppingCriteria } = transformers);
+						const { env, AutoTokenizer, AutoProcessor, AutoModelForCausalLM, AutoModelForImageTextToText } = transformers;
+						({ RawImage, TextStreamer, InterruptableStoppingCriteria } = transformers);
 						const path = root + id + "/";
 						Object.assign(env, { localModelPath: root, allowLocalModels: true, allowRemoteModels: false,
 							useBrowserCache: false, useWasmCache: false,
@@ -568,8 +594,12 @@ globalThis.llmLocal = (() => {
 						Object.assign(env.backends.onnx.wasm, {
 							numThreads: 1, proxy: false, wasmPaths: { mjs: factoryURL }, wasmBinary: await wasm.arrayBuffer()
 						});
-						tokenizer = await AutoTokenizer.from_pretrained(id, { local_files_only: true });
-						model = await AutoModelForCausalLM.from_pretrained(id, {
+						if (vision) {
+							processor = await AutoProcessor.from_pretrained(id, { local_files_only: true });
+							tokenizer = processor.tokenizer;
+						} else tokenizer = await AutoTokenizer.from_pretrained(id, { local_files_only: true });
+						const modelClass = vision ? AutoModelForImageTextToText : AutoModelForCausalLM;
+						model = await modelClass.from_pretrained(id, {
 							device, dtype, local_files_only: true,
 							// WebGPU sessions routinely assign some operations to the CPU. Log errors and fatal messages.
 							...(device === "webgpu" ? { session_options: { logSeverityLevel: 3 } } : {})
@@ -599,9 +629,28 @@ globalThis.llmLocal = (() => {
 
 				const inputMessages = toolFormat ? toolFormat.prepareMessages(messages) : messages;
 				const definitions = toolFormat?.prepareTools?.(tools) ?? tools;
-				const inputs = tokenizer.apply_chat_template(inputMessages, {
+				const templateOptions = {
 					tools: definitions, add_generation_prompt: true, enable_thinking: thinking
-				});
+				};
+				let inputs;
+				if (processor) {
+					const imageURLs = [];
+					const conversation = inputMessages.map(message => {
+						if (!Array.isArray(message.content)) return message;
+						return { ...message, content: message.content.map(part => {
+							if (part.type !== "image_url") return part;
+							imageURLs.push(part.image_url.url);
+							return { type: "image" };
+						}) };
+					});
+					const images = await Promise.all(imageURLs.map(url => {
+						const separator = url.indexOf(",");
+						const bytes = Uint8Array.from(atob(url.slice(separator + 1)), char => char.charCodeAt(0));
+						return RawImage.fromBlob(new Blob([bytes], { type: url.slice(5, url.indexOf(";")) }));
+					}));
+					const prompt = processor.apply_chat_template(conversation, templateOptions);
+					inputs = await processor(images.length ? images : null, prompt, { add_special_tokens: false });
+				} else inputs = tokenizer.apply_chat_template(inputMessages, templateOptions);
 				const promptTokens = inputs.input_ids.dims.at(-1);
 				const limit = Math.min(maxTokens, contextLimit - promptTokens);
 				if (limit < 1) {
@@ -612,7 +661,8 @@ globalThis.llmLocal = (() => {
 				}
 				// Bound the size of the logits and report activity as the key/value cache fills.
 				let cache;
-				if (promptTokens > chunkSize) {
+				// The vision decoder keeps only the last logits and needs all image tokens during prefill.
+				if (!processor && promptTokens > chunkSize) {
 					self.postMessage({ status: "Reading the prompt locally…" });
 					for (let end = chunkSize; end < promptTokens; end += chunkSize) {
 						const prefix = await model.generate({
@@ -793,7 +843,8 @@ globalThis.llmLocal = (() => {
 		const cpuOnly = build.cpuRuntime;
 		const factory = cpuOnly ? new Blob([files.shift()], { type: "text/javascript" }) : modules.factory;
 		const setup = { modules: { ...modules, factory }, wasm, id: model.modelId ?? model.id, root,
-			device: model.device, bufferBytes, dtype: build.dtype, toolFormat: model.toolFormat, prefillChunkSize: model.prefillChunkSize,
+			device: model.device, bufferBytes, dtype: build.dtype, vision: model.vision,
+			toolFormat: model.toolFormat, prefillChunkSize: model.prefillChunkSize,
 			files: Object.fromEntries(manifest.slice(cpuOnly ? 2 : 1).map(({ name }, index) => [name, files[index]])) };
 		const url = URL.createObjectURL(new Blob([`(${runWorker})(${createReply}, ${lfmToolFormat}, ${xmlToolFormat});`],
 			{ type: "text/javascript" }));
@@ -811,9 +862,17 @@ globalThis.llmLocal = (() => {
 		}
 	}
 
-	async function preparePair(pair, { onProgress, signal, timeoutMs, primaryError, allowRetry = true } = {}) {
+	async function preparePair(pair, { onProgress, signal, timeoutMs, primaryError, allowRetry = true, requiresVision = false } = {}) {
 		signal?.throwIfAborted();
 		const { primary, fallback } = pair;
+		if (requiresVision) {
+			if (preparation?.model && !preparation.model.vision) {
+				preparation.controller.abort(new DOMException("Preparing the vision model.", "AbortError"));
+				preparation = undefined;
+			}
+			if (preparation) preparation.requiresVision = true;
+			if (engine && !engine.model.vision) release();
+		}
 		if (allowRetry && retryPending && fallback && !primaryError) {
 			retryPending = false;
 			if (preparation?.model === fallback) {
@@ -829,7 +888,7 @@ globalThis.llmLocal = (() => {
 				onProgress?.(readyState(session));
 				return session;
 			}
-			task = preparation = { controller: new AbortController(), listeners: new Set() };
+			task = preparation = { controller: new AbortController(), listeners: new Set(), requiresVision };
 			const preparing = task;
 			const publish = state => {
 				preparing.state = state;
@@ -846,7 +905,7 @@ globalThis.llmLocal = (() => {
 					if (!vfs) throw new Error("The browser model needs access to the virtual file system.");
 					return { vfs, bufferBytes: await webgpuBufferBytes(model, request) };
 				});
-				const report = fallback && ((_name, loaded, total) =>
+				const report = (fallback || model.vision) && ((_name, loaded, total) =>
 					publish({ label, message: `Downloading ${label}…`, loaded, total }));
 				const build = await prepareAssets(vfs, model, report, signal, timeoutMs);
 				publish({ label, message: `Loading ${label}…` });
@@ -862,7 +921,7 @@ globalThis.llmLocal = (() => {
 					try { return await install(primary); }
 					catch (error) {
 						preparing.controller.signal.throwIfAborted();
-						if (!fallback) throw error;
+						if (!fallback || (preparing.requiresVision && !fallback.vision)) throw error;
 						failure = error;
 					}
 				}
@@ -884,26 +943,53 @@ globalThis.llmLocal = (() => {
 		} finally { if (onProgress) task.listeners.delete(onProgress); }
 	}
 
+	function prepareChatMessages(messages) {
+		if (!Array.isArray(messages)) throw new Error("Supply chat messages as an array.");
+		const escapeMarkers = text => (text ?? "").replace(
+			/<\|[\w-]+\|>|<\/?(?:tool_response|tool_call|think)>/g, marker => "＜" + marker.slice(1));
+		let requiresVision = false;
+		const normalized = messages.map(message => {
+			if (!message || !["system", "user", "assistant", "tool"].includes(message.role)) {
+				throw new Error("The browser model received an unsupported message role.");
+			}
+			const { content } = message;
+			if (content == null || typeof content === "string") return { ...message, content: escapeMarkers(content) };
+			if (message.role !== "user" || !Array.isArray(content)) throw new Error("The browser model received invalid message content.");
+			const parts = content.map(part => {
+				if (part?.type === "text" && typeof part.text === "string") {
+					return { type: "text", text: escapeMarkers(part.text) };
+				}
+				const url = part?.image_url?.url;
+				if (part?.type === "image_url" && typeof url === "string" && url.length <= 2 * 1024 * 1024 &&
+					/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(url)) {
+					requiresVision = true;
+					return { type: "image_url", image_url: { url } };
+				}
+				throw new Error("Browser chat accepts text parts and base64 PNG, JPEG, WebP, or GIF image URLs.");
+			});
+			return { ...message, content: parts.some(part => part.type === "image_url") ? parts :
+				parts.map(part => part.text).join("\n") };
+		});
+		return { normalized, requiresVision };
+	}
+
 	async function generate({ model, fallbackModel, device, messages, tools, thinking, maxTokens, temperature, stopTokens,
 		toolChoice, stream, signal, timeoutMs, onToken, onStatus, onProgress, onRestart }) {
 		const pair = requestSelection(model, fallbackModel, device);
 		if (toolChoice && !["auto", "none"].includes(toolChoice)) {
 			throw new Error("Browser chat models support automatic tool selection.");
 		}
-		if (!Array.isArray(messages) || messages.some(message => !message ||
-			!["system", "user", "assistant", "tool"].includes(message.role) ||
-			(message.content != null && typeof message.content !== "string"))) {
-			throw new Error("The selected browser model accepts text messages. Use a vision-capable API model for images.");
+		const { normalized, requiresVision } = prepareChatMessages(messages);
+		if (requiresVision && !pair.primary.vision) {
+			throw new Error("Select a vision-capable WebGPU or API model to send images.");
 		}
-		const escapeMarkers = text => (text ?? "").replace(
-			/<\|[\w-]+\|>|<\/?(?:tool_response|tool_call|think)>/g, marker => "＜" + marker.slice(1));
 		signal?.throwIfAborted();
 		if (operation) throw new Error("A browser model is already generating on this page.");
 		usePair(pair);
 		const controller = operation = new AbortController();
 		const request = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
 		const payload = { stream, contextLimit, thinking: thinking === true,
-			messages: messages.map(message => ({ ...message, content: escapeMarkers(message.content) })),
+			messages: normalized,
 			tools: toolChoice === "none" || !Array.isArray(tools) ? [] : tools,
 			maxTokens: Number.isSafeInteger(maxTokens) && maxTokens > 0 ? Math.min(maxTokens, 4096) : 1024,
 			temperature: Number.isFinite(temperature) && temperature >= 0 ? temperature : thinking ? 0.6 : 0,
@@ -922,13 +1008,14 @@ globalThis.llmLocal = (() => {
 		});
 		try {
 			const report = state => { onProgress?.(state); if (state.message) onStatus?.(state.message); };
-			const options = { signal: request, timeoutMs, onProgress: report };
+			const options = { signal: request, timeoutMs, onProgress: report, requiresVision };
 			let session = await preparePair(pair, options);
 			let reply;
 			try { reply = await attempt(session); }
 			catch (error) {
 				request.throwIfAborted();
 				if (!pair.fallback || session.model !== pair.primary || error.code === "context-limit") throw error;
+				if (requiresVision && !pair.fallback.vision) throw error;
 				onRestart?.();
 				session = await preparePair(pair, { ...options, primaryError: error });
 				reply = await attempt(session);
@@ -950,7 +1037,7 @@ globalThis.llmLocal = (() => {
 	const preview = window.susi?.localModel;
 	if (preview) {
 		// The preview is sandboxed. Its host runs the same worker against the host's model cache.
-		return { models, defaultConfig, localConfig, modelPair, modelLabel,
+		return { models, defaultConfig, localConfig, modelPair, modelLabel, supportsImages,
 			status: (options, { signal, onProgress } = {}) =>
 				preview("status", [options], signal, (name, value) => { if (name === "progress") onProgress?.(value); }),
 			generate: ({ signal, onToken, onStatus, onProgress, onRestart, ...options }) => {
@@ -983,5 +1070,6 @@ globalThis.llmLocal = (() => {
 		}
 	}
 
-	return { models, defaultConfig, localConfig, modelPair, modelLabel, status, download, generate, close, requestPrimaryRetry, previewRequest };
+	return { models, defaultConfig, localConfig, modelPair, modelLabel, supportsImages,
+		status, download, generate, close, requestPrimaryRetry, previewRequest };
 })();

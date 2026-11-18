@@ -65,6 +65,9 @@ Pass `provider: "browser"`, `model: "qwen3-0.6b-webgpu"`, and `fallbackModel: "l
 for available combination IDs. To use a single device, install it with `llmLocal.download(vfs, model, device)`
 and pass `model` and `device` to the client.
 
+For images, select `lfm3-vl-2b-webgpu` and use OpenAI Chat Completions `image_url` parts in user messages.
+The browser backend accepts base64 data URLs and HTTP(S) image URLs that permit browser access via CORS.
+
 ## VFS notebook
 
 Choose **VFS notebook**, or add the **App file editor** block to any other purpose. The starter includes

@@ -189,6 +189,63 @@ globalThis.llmClient = (() => {
             : { ...settings, baseUrl: config.apihost, model: config.model };
     }
 
+    function supportsImages(options) {
+        return options.provider !== 'browser' || globalThis.llmLocal?.supportsImages?.(options) === true;
+    }
+
+    async function inlineBrowserImages(messages, { signal, timeoutMs }) {
+        if (!Array.isArray(messages)) return messages;
+        const images = new Map();
+        async function load(url) {
+            const address = new URL(url);
+            if (address.username || address.password) throw new Error('Image URLs must omit embedded credentials.');
+            const request = llmRequestLifetime(signal, timeoutMs);
+            try {
+                // Read in the caller's origin so sandboxed apps retain their existing network permissions.
+                const response = await fetch(address, {
+                    signal: request.signal, credentials: 'omit', mode: 'cors', referrerPolicy: 'no-referrer'
+                });
+                const type = response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase();
+                if (!response.ok || !response.body || !/^image\/(png|jpeg|webp|gif)$/.test(type)) {
+                    await response.body?.cancel();
+                    throw new Error('The image URL must return a PNG, JPEG, WebP, or GIF image.');
+                }
+                let bytes = 0;
+                const body = response.body.pipeThrough(new TransformStream({
+                    transform(chunk, controller) {
+                        bytes += chunk.byteLength;
+                        if (bytes > 1500000) throw new Error('Remote browser images are limited to 1.5 MB.');
+                        request.touch();
+                        controller.enqueue(chunk);
+                    }
+                }));
+                const blob = await new Response(body, { headers: { 'Content-Type': type } }).blob();
+                const dataURL = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(reader.error);
+                    reader.readAsDataURL(blob);
+                });
+                request.signal.throwIfAborted();
+                return dataURL;
+            } catch (error) {
+                if (request.signal.aborted) throw request.signal.reason;
+                if (error instanceof TypeError) throw new Error('Could not load the image URL. Check that the site allows browser access (CORS).', { cause: error });
+                throw error;
+            } finally { request.dispose(); }
+        }
+        return Promise.all(messages.map(async message => {
+            if (message?.role !== 'user' || !Array.isArray(message.content)) return message;
+            const content = await Promise.all(message.content.map(async part => {
+                const url = part?.image_url?.url;
+                if (part?.type !== 'image_url' || typeof url !== 'string' || !/^https?:\/\//i.test(url)) return part;
+                if (!images.has(url)) images.set(url, load(url));
+                return { ...part, image_url: { ...part.image_url, url: await images.get(url) } };
+            }));
+            return { ...message, content };
+        }));
+    }
+
     function create({ systemPrompt: defaultSystemPrompt = "", getMessages = () => [],
         normalizeMessages = messages => messages, readApiKey = () => "", browserBackend = globalThis.llmLocal } = {}) {
         async function modelStatus(options = {}, preparation) {
@@ -206,11 +263,13 @@ globalThis.llmClient = (() => {
             options.signal?.throwIfAborted();
             let firstTokenAt = 0;
             try {
+                const messages = normalizeMessages(options.messages || getMessages());
                 const { model = options.model, message, finishReason, promptTokens, completionTokens } = await browserBackend.generate({
                     model: options.model, fallbackModel: options.fallbackModel, device: options.device, thinking: options.thinking, stream,
                     maxTokens: options.maxTokens, temperature: options.temperature, stopTokens: options.stopTokens,
                     tools: options.tools, toolChoice: options.toolChoice, timeoutMs: options.timeoutMs,
-                    messages: normalizeMessages(options.messages || getMessages()), signal: options.signal,
+                    messages: browserBackend.supportsImages?.(options) ? await inlineBrowserImages(messages, options) : messages,
+                    signal: options.signal,
                     onStatus: options.onStatus, onProgress: options.onProgress,
                     onRestart: options.onRestart && (() => { firstTokenAt = 0; options.onRestart(); }),
                     onToken(text) {
@@ -497,7 +556,7 @@ globalThis.llmClient = (() => {
         };
     }
 
-    return { create, requestOptions, normalizeConfig: normalizeLLMConfig, createConfigStore, parseConfigFile,
+    return { create, requestOptions, supportsImages, normalizeConfig: normalizeLLMConfig, createConfigStore, parseConfigFile,
         createSessionKeyStore, renderModelProgress,
         validateApiKey: llmEndpointKey, isRetiredEndpoint, defaultOllamaPort: DEFAULT_OLLAMA_PORT };
 })();

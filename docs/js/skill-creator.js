@@ -34,7 +34,7 @@
 		namePrompt: "Give the supplied skill a short, descriptive name that makes it easy to find. " +
 			"Use the language of the skill. Return only one plain-text line of up to 80 characters, without a file extension."
 	};
-	let vfs, modelAvailable = false, browserModel = false, modelRequest = 0, operation, saving = false;
+	let vfs, modelAvailable = false, imageModelAvailable = false, modelRequest = 0, operation, saving = false;
 	let screenshot;
 	let draftSaved = false;
 
@@ -47,7 +47,7 @@
 		const locked = !vfs || Boolean(operation) || saving;
 		generate.disabled = locked || !modelAvailable || !url.value.trim();
 		capture.disabled = locked || !captureSupported;
-		generateScreenshot.disabled = locked || !screenshot || !modelAvailable || browserModel;
+		generateScreenshot.disabled = locked || !screenshot || !imageModelAvailable;
 		discardScreenshot.disabled = locked;
 		cancel.hidden = !operation;
 		cancel.disabled = operation?.signal.aborted ?? false;
@@ -93,7 +93,7 @@
 
 	function showModel(model, config) {
 		modelAvailable = Boolean(model?.ready);
-		browserModel = config?.chatProvider === "browser";
+		imageModelAvailable = modelAvailable && llmClient.supportsImages(llmClient.requestOptions(config));
 		modelLabel.textContent = modelAvailable ? `Model · ${model.label}` : "";
 		modelWarning.hidden = modelAvailable;
 		modelWarning.querySelector("strong").textContent = model?.message || "No model active.";
@@ -242,9 +242,9 @@
 			const sourceURL = url.value.trim();
 			const address = image && !sourceURL ? undefined : parseAgentPageURL(sourceURL);
 			const config = await readLLMConfig();
-			if (image && config.chatProvider === "browser") {
-				browserModel = true;
-				throw new Error("Select a vision-capable API model to generate a skill from a screenshot.");
+			if (image && !llmClient.supportsImages(llmClient.requestOptions(config))) {
+				imageModelAvailable = false;
+				throw new Error("Select a vision-capable model to generate a skill from a screenshot.");
 			}
 			const model = await client.modelStatus(llmClient.requestOptions(config), { signal, onProgress: showModelPreparation });
 			showModel(model, config);

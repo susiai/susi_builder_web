@@ -27,6 +27,52 @@ const documentAttachments = (() => {
 		}
 	};
 	const scripts = new Map();
+	const maxImageURLLength = 140000;
+
+	function isImage(mimeType, name = "") {
+		return mimeType.startsWith("image/") || ((!mimeType || mimeType === "application/octet-stream") &&
+			/\.(?:apng|avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(name));
+	}
+
+	function isImageURL(url, mimeType) {
+		return typeof url === "string" && url.length <= maxImageURLLength &&
+			(mimeType === "image/png" || mimeType === "image/jpeg") &&
+			url.startsWith(`data:${mimeType};base64,`) && /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(url);
+	}
+
+	async function readImage(file, signal) {
+		if (file.size > 32 * 1024 * 1024) throw new Error("Images are limited to 32 MiB each.");
+		const image = new Image();
+		const source = URL.createObjectURL(file);
+		const name = file.name || "Pasted image";
+		try {
+			image.src = source;
+			try { await image.decode(); }
+			catch { throw new Error("Could not read this image. Try PNG or JPEG."); }
+			signal.throwIfAborted();
+			const canvas = document.createElement("canvas");
+			const context = canvas.getContext("2d");
+			let scale = Math.min(1, 1440 / Math.max(image.naturalWidth, image.naturalHeight));
+			const draw = () => {
+				canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+				canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+				context.drawImage(image, 0, 0, canvas.width, canvas.height);
+			};
+			draw();
+			const png = canvas.toDataURL("image/png");
+			if (png.length <= maxImageURLLength) return { name, mimeType: "image/png", imageUrl: png };
+			// Downsize large images to bound the request and the saved conversation.
+			for (;;) {
+				context.globalCompositeOperation = "destination-over";
+				context.fillStyle = "#fff";
+				context.fillRect(0, 0, canvas.width, canvas.height);
+				const jpeg = canvas.toDataURL("image/jpeg", 0.86);
+				if (jpeg.length <= maxImageURLLength) return { name, mimeType: "image/jpeg", imageUrl: jpeg };
+				scale *= 0.75;
+				draw();
+			}
+		} finally { URL.revokeObjectURL(source); }
+	}
 
 	function findFormat(mimeType, name = "") {
 		const byMimeType = Object.values(formats).find(format => format.mimeType === mimeType);
@@ -138,5 +184,5 @@ const documentAttachments = (() => {
 		return `${fence}text\n${text}${lineBreak}${fence}\n`;
 	}
 
-	return { findFormat, read, readText, literalMarkdown };
+	return { findFormat, read, readText, literalMarkdown, isImage, isImageURL, readImage };
 })();
