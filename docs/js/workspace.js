@@ -17,6 +17,7 @@
 	const resetError = $("vfs-reset-error");
 	const actions = [$("backup-export"), $("backup-inspect"), $("backup-safety"), backupFile, restorePassphrase,
 		$("backup-restore-cancel"), clearButton, resetDefaults, $("cancel-vfs-reset"), resetConfirm];
+	const modelPaths = new Set([...llmLocal.modelPaths, ...stt.modelPaths, ...tts.modelPaths]);
 	let vfs;
 	let busy = false;
 	let ready = false;
@@ -64,8 +65,8 @@
 
 	function encodeWorkspace(snapshot, local) {
 		// Pinned model downloads can be restored from their sources and exceed the archive limit.
-		const entries = snapshot.entries.filter(entry =>
-			!stt.modelPaths.has(entry.path) && !tts.modelPaths.has(entry.path));
+		const entries = snapshot.entries.filter(({ path }) =>
+			!modelPaths.has(path.replace(/^\.webstation\/apps\/[a-f0-9]{32}\/chat\//, "")));
 		return susiBackup.encode({ ...snapshot, entries }, { local });
 	}
 

@@ -24,7 +24,7 @@
 					<h2 id="workspace-backups-title">Backups and recovery</h2>
 					<p>Download projects, settings, run activity, saved editor drafts, and conversations.
 						API keys stored for this tab are excluded. Browser storage is tied to this origin and can be cleared by the browser.</p>
-					<p>Backups include speech settings. Download the speech models again after restoring a backup.</p>
+					<p>Backups include model settings. Browser model files can be downloaded again after restoring.</p>
 					<p id="storage-origin"></p><p id="storage-status" data-vfs-open-status role="status"></p>
 					<button id="storage-persist" type="button" disabled>Request persistent storage</button>
 					<p>Backups download as unencrypted ZIP files with a 128 MiB unpacked limit.</p>
@@ -79,10 +79,11 @@
 
 		<script src="js/vfs.js?v=042c0bb7" data-vfs-skip-preload></script>
 		<script src="js/transformer-model-assets.js?v=9de616b6"></script>
+		<script src="js/llm-local.js?v=fc490ff5"></script>
 		<script src="js/stt.js?v=91cb9caf"></script>
 		<script src="js/tts.js?v=123a3be2"></script>
 		<script src="js/vendor/zip-2.25.0.min.js?v=49bb1d59"></script>
 		<script src="js/vfs-zip.js?v=5a1453de"></script>
-		<script src="js/workspace.js?v=7c2b43f5"></script>
+		<script src="js/workspace.js?v=6e3a3d8c"></script>
 	</body>
 </html>

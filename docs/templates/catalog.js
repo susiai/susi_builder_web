@@ -40,7 +40,7 @@ globalThis.templateCatalog = {
       { "source": "docs/js/vendor/onnxruntime-ThirdPartyNotices.txt", "path": "js/vendor/onnxruntime-ThirdPartyNotices.txt" }
     ],
     "scripts": ["js/llm-client.js", "js/transformer-model-assets.js", "js/llm-local.js"],
-    "bytes": 1191292
+    "bytes": 1191542
   },
   "designs": [
     {

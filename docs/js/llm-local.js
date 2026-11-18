@@ -177,6 +177,11 @@ globalThis.llmLocal = (() => {
 			}))];
 	}
 
+	const modelPaths = new Set(models.flatMap(model => {
+		const builds = model.cachedBuild ? [model, model.cachedBuild] : [model];
+		return builds.flatMap(build => assets(model, build).map(asset => asset.path.slice(1)));
+	}));
+
 	function modelPair(primaryId, fallbackId) {
 		const primary = models.find(model => model.id === primaryId && model.device === "webgpu");
 		const fallback = models.find(model => model.id === fallbackId && model.device === "wasm");
@@ -1037,7 +1042,7 @@ globalThis.llmLocal = (() => {
 	const preview = window.susi?.localModel;
 	if (preview) {
 		// The preview is sandboxed. Its host runs the same worker against the host's model cache.
-		return { models, defaultConfig, localConfig, modelPair, modelLabel, supportsImages,
+		return { models, modelPaths, defaultConfig, localConfig, modelPair, modelLabel, supportsImages,
 			status: (options, { signal, onProgress } = {}) =>
 				preview("status", [options], signal, (name, value) => { if (name === "progress") onProgress?.(value); }),
 			generate: ({ signal, onToken, onStatus, onProgress, onRestart, ...options }) => {
@@ -1070,6 +1075,6 @@ globalThis.llmLocal = (() => {
 		}
 	}
 
-	return { models, defaultConfig, localConfig, modelPair, modelLabel, supportsImages,
+	return { models, modelPaths, defaultConfig, localConfig, modelPair, modelLabel, supportsImages,
 		status, download, generate, close, requestPrimaryRetry, previewRequest };
 })();
