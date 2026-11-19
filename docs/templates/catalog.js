@@ -644,6 +644,7 @@ globalThis.templateCatalog = {
       "license": "MIT, LGPL-2.1-or-later, Apache-2.0 and bundled notices",
       "files": [
         {"source": "docs/js/vfs.js", "path": "js/chat-workbench/vfs.js", "rawScript": true},
+        {"source": "docs/js/python-runner.js", "path": "js/chat-workbench/python-runner.js", "rawScript": true},
         {"source": "docs/js/browser-client.js", "path": "js/chat-workbench/browser-client.js", "rawScript": true},
         {"source": "docs/js/agent-runtime.js", "path": "js/chat-workbench/agent-runtime.js", "rawScript": true},
         {"source": "docs/js/workstation-state.js", "path": "js/chat-workbench/workstation-state.js", "rawScript": true},
@@ -691,6 +692,7 @@ globalThis.templateCatalog = {
       ],
       "bundle": [
         "js/chat-workbench/vfs.js",
+        "js/chat-workbench/python-runner.js",
         "js/chat-workbench/browser-client.js",
         "js/chat-workbench/agent-runtime.js",
         "js/chat-workbench/workstation-state.js",
@@ -712,7 +714,7 @@ globalThis.templateCatalog = {
       ],
       "scripts": [],
       "styles": [],
-      "bytes": 10228475
+      "bytes": 10247552
     }
   ],
   "purposes": [

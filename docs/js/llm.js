@@ -57,7 +57,7 @@ function normalizeAgentToolDescriptions(descriptions) {
         if (!Object.hasOwn(current, name) && Object.hasOwn(current, legacy)) current[name] = current[legacy];
         delete current[legacy];
     }
-    for (const name of ['get_datetime', 'calculator', 'search_skills', 'webfetch', 'read_attachments', ...FILE_TOOL_NAMES,
+    for (const name of ['get_datetime', 'calculator', 'search_skills', 'webfetch', 'read_attachments', 'run_python', ...FILE_TOOL_NAMES,
         ...BROWSER_TOOL_SCHEMAS.map(tool => tool.name)]) {
         if (typeof current[name] === 'string') current[name] = agentToolDescription(current[name]);
     }
@@ -333,6 +333,29 @@ function createLLM(options = {}) {
                 }
             },
             handler: () => options.attachments ?? []
+        },
+        run_python: {
+            definition: {
+                type: 'function',
+                function: {
+                    name: 'run_python',
+                    description: 'Run a saved Python script from the current project directory. Returns stdout, stderr, ' +
+                        'and the exit code. File changes made inside the project are saved when the script finishes.',
+                    parameters: {
+                        type: 'object',
+                        properties: { path: { type: 'string', description: 'Project-relative path to a saved Python script.' } },
+                        required: ['path'], additionalProperties: false
+                    }
+                }
+            },
+            handler: async (_call, context, args) => {
+                if (typeof args.path !== 'string' || Object.keys(args).length !== 1) {
+                    throw new Error('Provide only the path to a saved Python file.');
+                }
+                const vfs = await (typeof options.vfs === 'function' ? options.vfs(context) : options.vfs);
+                if (!vfs?.runPython) throw new Error('Open a project to run Python.');
+                return vfs.runPython(args.path, context.signal);
+            }
         },
         read_file: {
             definition: {

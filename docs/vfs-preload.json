@@ -756,6 +756,11 @@
   "Skills/smart-home.md",
   "Skills/table-summary.md",
   "bin/",
+  "bin/python_example_csv.py",
+  "bin/python_example_image.py",
+  "bin/python_example_parquet.py",
+  "bin/python_example_plot.py",
+  "bin/python_example_sqlite.py",
   "bin/shell_regression.sh",
   "bin/shell_regression_advanced.sh",
   "config.json"

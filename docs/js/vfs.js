@@ -39,6 +39,8 @@ const vfsChatTerminalRoot = '/Apps/chat-terminal/';
 const vfsChatTerminalSeed = 'bundled-chat-terminal';
 const vfsChatTerminalVersion = 4;
 const vfsSkillsSeed = 'bundled-skills';
+const vfsPythonExamplesSeed = 'bundled-python-examples';
+const isVfsPythonExample = path => /^\/bin\/python_example_[^/]+\.py$/.test(path);
 const vfsStandaloneApp = typeof document !== 'undefined' &&
   document.currentScript?.hasAttribute('data-vfs-standalone');
 const vfsSkipPreload = typeof document !== 'undefined' &&
@@ -208,6 +210,9 @@ async function initializeVfsDatabase(database, loadDefaults = loadVfsPreload) {
       if (existingPath === undefined && current?.generation === opened?.generation) {
         for (const { path, value } of defaults) await vfsRequest(store.add({ id: path, value }));
         if (loadDefaults === loadVfsPreload) await vfsRequest(metadata.put(true, vfsSkillsSeed));
+        if (defaults.some(({ path }) => isVfsPythonExample(path))) {
+          await vfsRequest(metadata.put(true, vfsPythonExamplesSeed));
+        }
         if (seedChatTerminal && defaults.some(entry => entry.path === vfsChatTerminalRoot + 'index.html')) {
           await vfsRequest(metadata.put(vfsChatTerminalVersion, vfsChatTerminalSeed));
         }
@@ -217,8 +222,13 @@ async function initializeVfsDatabase(database, loadDefaults = loadVfsPreload) {
   }
   vfsSessions.set(database, { generation: state.generation, stale: false });
   if (loadDefaults === loadVfsPreload) {
-    try { await seedVfsSkills(database); }
-    catch (error) { console.warn('Unable to install bundled skills:', error); }
+    for (const [label, marker, include] of [
+      ['skills', vfsSkillsSeed, path => path.startsWith('/Skills/')],
+      ['Python examples', vfsPythonExamplesSeed, isVfsPythonExample]
+    ]) {
+      try { await seedVfsDefaults(database, marker, include); }
+      catch (error) { console.warn(`Unable to install bundled ${label}:`, error); }
+    }
   }
   if (seedChatTerminal) {
     // Keep an existing workspace usable if its bundled app cannot be installed yet.
@@ -227,12 +237,13 @@ async function initializeVfsDatabase(database, loadDefaults = loadVfsPreload) {
   }
 }
 
-async function seedVfsSkills(database) {
-  const installed = await vfsTransaction(database, 'readonly', (_store, metadata) => vfsRequest(metadata.get(vfsSkillsSeed)));
+async function seedVfsDefaults(database, marker, include) {
+  const installed = await vfsTransaction(database, 'readonly', (_store, metadata) => vfsRequest(metadata.get(marker)));
   if (installed) return;
-  const entries = await loadVfsPreload(path => path.startsWith('/Skills/'));
+  const entries = await loadVfsPreload(include);
+  if (!entries.length) return;
   await vfsTransaction(database, 'readwrite', async (store, metadata) => {
-    if (await vfsRequest(metadata.get(vfsSkillsSeed))) return;
+    if (await vfsRequest(metadata.get(marker))) return;
     // Defaults list parents first. Keep user files even when one occupies a bundled folder's path.
     const blockedFolders = [];
     for (const { path, value } of entries) {
@@ -245,8 +256,8 @@ async function seedVfsSkills(database) {
       }
       if (await vfsRequest(store.getKey(path)) === undefined) await vfsRequest(store.add({ id: path, value }));
     }
-    // Later deletions are intentional. The library can reinstall defaults on request.
-    await vfsRequest(metadata.put(true, vfsSkillsSeed));
+    // Respect later deletions. Reset Default Files can reinstall these files on request.
+    await vfsRequest(metadata.put(true, marker));
   });
 }
 
@@ -489,8 +500,9 @@ function checkVfsGeneration(session, state) {
 }
 
 // Run filesystem operations against a single committed view of the shared VFS.
-function vfsTransaction(database, mode, operation, guard) {
+function vfsTransaction(database, mode, operation, guard, signal = guard?.signal) {
   return new Promise((resolve, reject) => {
+    signal?.throwIfAborted();
     const transaction = database.transaction(['keyValueStore', 'metadata'], mode);
     let result;
     let failure;
@@ -513,7 +525,7 @@ function vfsTransaction(database, mode, operation, guard) {
       }
       // A cancellation can arrive while an IDB request is pending. Abort before the transaction commits,
       // even when its file writes already succeeded within the still-uncommitted transaction.
-      guard?.signal?.throwIfAborted();
+      signal?.throwIfAborted();
       if (guardedRun && guardedRun.leaseUntil <= Date.now()) throw new Error('The agent lease expired. This write was not applied.');
       return value;
     })().then((value) => {
@@ -672,6 +684,12 @@ function createVfsFileSystem(database, directoryRange) {
     return encoder.encode(value ?? '');
   }
 
+  function treeEntry(record) {
+    const directory = record.id.endsWith('/');
+    return { mtime: record.mtime ?? 0, mode: record.mode ?? (directory ? 0o755 : 0o644),
+      size: directory ? 0 : record.value instanceof Blob ? record.value.size : bytes(record.value).byteLength };
+  }
+
   function append(previous, value) {
     if (typeof previous === 'string' && typeof value === 'string') return previous + value;
     if (previous instanceof Blob || value instanceof Blob) return new Blob([previous, value]);
@@ -776,18 +794,75 @@ function createVfsFileSystem(database, directoryRange) {
     stat(path) {
       return read(async (store) => {
         const record = await requireEntry(store, resolvePath('/', path));
-        const isDirectory = record.id.endsWith('/');
-        return {
-          isDirectory,
-          size: isDirectory ? 0 : record.value instanceof Blob ? record.value.size : bytes(record.value).byteLength,
-          mode: record.mode ?? (isDirectory ? 0o755 : 0o644),
-          mtime: new Date(record.mtime ?? 0)
-        };
+        const { mtime, ...entry } = treeEntry(record);
+        return { ...entry, isDirectory: record.id.endsWith('/'), mtime: new Date(mtime) };
       });
     },
 
     async readBytes(path) {
       return (await readFile(path)).bytes;
+    },
+
+    async snapshotTree(path, { exclude = [], maxEntries, maxBytes, signal } = {}) {
+      const entries = await read(async (store) => {
+        const { id } = await requireDirectory(store, resolvePath('/', path));
+        const keys = (await vfsRequest(store.getAllKeys(directoryRange(id, true))))
+          .filter(key => !exclude.includes(key.slice(id.length).split('/')[0]));
+        if (keys.length > maxEntries) throw new Error('The Python workspace has too many files.');
+        let total = 0;
+        const result = [];
+        for (const key of keys) {
+          signal?.throwIfAborted();
+          const record = await vfsRequest(store.get(key));
+          const entry = treeEntry(record);
+          total += entry.size;
+          if (total > maxBytes) throw new Error(`The Python workspace exceeds ${maxBytes / (1024 * 1024)} MiB.`);
+          result.push({ ...entry, path: key.slice(id.length), value: key.endsWith('/') ? null : record.value });
+        }
+        return result;
+      });
+      return Promise.all(entries.map(async ({ value, ...entry }) => ({ ...entry,
+        data: value === null ? null : value instanceof Blob ? new Uint8Array(await value.arrayBuffer()) : bytes(value) })));
+    },
+
+    applyTreeChanges(path, changes, { guard, signal } = {}) {
+      const root = directoryKey(resolvePath('/', path));
+      // Validate all expected entries before applying a single transaction. Unrelated edits can proceed.
+      return vfsTransaction(database, 'readwrite', async (store) => {
+        await requireDirectory(store, resolvePath('/', root));
+        for (const { path: relative, before } of changes) {
+          if (!relative || relative.startsWith('/') || /[\\\x00-\x1f\x7f]/.test(relative) ||
+            relative.replace(/\/$/, '').split('/').some(part => !part || part === '.' || part === '..')) {
+            throw new Error('Invalid Python workspace path.');
+          }
+          const record = await vfsRequest(store.get(root + relative));
+          const current = record && treeEntry(record);
+          if (Boolean(current) !== Boolean(before) || (current &&
+            (current.mtime !== before.mtime || current.mode !== before.mode || current.size !== before.size ||
+              (before.data && !(record.value instanceof Blob) && bytes(record.value).some((byte, i) => byte !== before.data[i]))))) {
+            throw new Error(`Workspace entry changed while Python was running: ${relative}`);
+          }
+        }
+        // Removals are ordered children first, then additions are ordered parents first.
+        for (const { path: relative, after } of changes) {
+          signal?.throwIfAborted();
+          const key = root + relative;
+          const directory = key.endsWith('/');
+          if (!after) {
+            if (directory && await vfsRequest(store.getKey(directoryRange(key, true))) !== undefined) {
+              throw new Error(`Workspace directory changed while Python was running: ${relative}`);
+            }
+            await vfsRequest(store.delete(key));
+          } else {
+            const target = directory ? key.slice(0, -1) : key;
+            await requireDirectory(store, parent(target));
+            const counterpart = directory ? target : directoryKey(target);
+            if (await vfsRequest(store.getKey(counterpart)) !== undefined) fail('EEXIST', target);
+            await vfsRequest(store.put({ id: key, value: directory ? '' : vfsFileValue(after.data),
+              mode: after.mode, mtime: after.mtime }));
+          }
+        }
+      }, guard, signal);
     },
 
     write(path, data, { append: appendData = false, exclusive = false, expectedFile, returnMtime = false, mode = 0o644 } = {}) {

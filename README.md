@@ -23,11 +23,21 @@ Speech-to-text and speech output are off until you configure them there.
 - **Create App** combines designs, layouts, components, and bundled libraries. Build a dashboard, chat app, notebook,
   data workspace, or game from a starter with a live preview. [Template guide](docs/templates/README.md)
 - **Chat** streams replies and gives the agent tools to read, search, and edit files in the selected app.
+  The agent can call `run_python` with the path to a saved Python script in the active project.
   Paste or attach images and use LFM3-VL-2B on WebGPU or a vision-capable API model to read them.
   Attach text, PDF, XLSX, DOCX, PPTX, or audio files. Audio attachments use the selected speech-to-text model.
   Browser chat models run offline once downloaded to `/Models/Chat/`. Qwen3 0.6B and LFM2.5 350M support WebGPU
   and WASM. Qwen3 1.7B, Qwen3.5 2B, LFM2.5 1.2B Instruct, and LFM3 1.7B use WebGPU.
 - **Console** runs Bash-like commands and shell scripts against workspace files and keeps command history.
+  Run `python3 script.py` (also `python` or `python3.14`) to execute a workspace script in the browser.
+
+Python loads Pyodide from jsDelivr on demand, including Pyodide packages imported directly by the script. Scripts see
+workspace files under `/workspace` and use standard Python file operations. Changes are saved back when execution
+finishes. An interrupted run discards pending writes.
+
+Try `python3 /bin/python_example_csv.py` in Console, or list the five examples with `ls /bin/python_example_*.py`.
+Each example creates sample input and writes results under `python-examples/` in the current directory. Edit the
+sample input and rerun the script to see different results.
 
 ## How the preview runs without a server
 

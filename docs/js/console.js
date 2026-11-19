@@ -156,14 +156,18 @@
   }, 10000);
   const shellReady = Promise.resolve().then(async () => {
     if (!window.vfsReady) throw new Error('Workspace storage did not start. Reload the console.');
-    fs = createJustBashFileSystem(await window.vfsReady);
+    const vfs = await window.vfsReady;
+    fs = createJustBashFileSystem(vfs);
     const displayText = (args, { exec, cwd, stdin }) =>
       exec('cat', { args, cwd, stdin, stdinKind: 'bytes' });
     shell = new JustBash.Bash({
       fs,
       cwd: '/',
       env: { TERM: 'xterm-256color', COLORTERM: 'truecolor', TMPDIR: '/' },
-      customCommands: ['more', 'less'].map((name) => ({ name, execute: displayText }))
+      customCommands: [
+        ...['more', 'less'].map(name => ({ name, execute: displayText })),
+        ...susiPython.shellCommands(vfs.fileSystem)
+      ]
     });
     env = shell.getEnv();
   });

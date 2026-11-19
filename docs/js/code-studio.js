@@ -19,6 +19,8 @@
 	const tablist = document.getElementById("studio-tabs");
 	const panel = document.getElementById("studio-panel");
 	const host = document.getElementById("studio-editor");
+	const preview = document.getElementById("studio-image-preview");
+	const previewImage = preview.querySelector("img");
 	const empty = document.getElementById("studio-empty");
 	const pathLabel = document.getElementById("studio-path");
 	const languageLabel = document.getElementById("studio-language");
@@ -51,6 +53,7 @@
 	let vfs;
 	let editor;
 	let emptySession;
+	let previewUrl;
 	let speechSettings;
 	let speechRequest = 0;
 	const dictation = stt.createDictation({
@@ -88,8 +91,8 @@
 	}
 
 	function updateDictationControls() {
-		dictationControls.hidden = !active;
-		dictation.render(Boolean(speechSettings), !active || editor.getReadOnly());
+		dictationControls.hidden = !active?.session;
+		dictation.render(Boolean(speechSettings), !active?.session || editor.getReadOnly());
 	}
 
 	async function refreshSpeechSettings() {
@@ -133,6 +136,7 @@
 		return {
 			version: 1,
 			tabs: [...openFiles.values()].map((file) => {
+				if (!file.session) return { path: file.path };
 				const tab = {
 					path: file.path,
 					cursor: file.session.selection.getCursor(),
@@ -185,6 +189,8 @@
 
 	async function readSource(path) {
 		const value = await vfs.getasync(path);
+		const type = vfsImageType(path);
+		if (type) return { image: new Blob([value], { type }), text: typeof value === "string" ? value : undefined };
 		if (typeof value === "string") return { text: value };
 		const format = tableFileFormat(path);
 		if (format !== "csv" && format !== "jsonl") return {};
@@ -202,15 +208,20 @@
 		let unavailable = false;
 		for (const [index, tab] of state.tabs.entries()) {
 			const result = contents[index];
-			const { text: current, encoded } = result.status === "fulfilled" ? result.value : {};
+			const { text: current, encoded, image } = result.status === "fulfilled" ? result.value : {};
 			const hasDraft = typeof tab.draft === "string";
-			if (current === undefined && !hasDraft) {
+			if (current === undefined && !image && !hasDraft) {
 				unavailable = true;
 				continue;
 			}
 			const alreadySaved = hasDraft && current !== undefined && studioDraftText(tab.path, current) === tab.draft;
+			// Keep unsaved SVG source from earlier sessions accessible as an editor draft.
+			if (image && (!hasDraft || alreadySaved)) {
+				createTab(tab.path, { image });
+				continue;
+			}
 			const base = hasDraft && !alreadySaved ? tab.base : current;
-			const file = createTab(tab.path, base, base === current ? encoded : undefined);
+			const file = createTab(tab.path, { text: base, encoded: base === current ? encoded : undefined });
 			if (hasDraft && !alreadySaved) {
 				file.session.setValue(tab.draft);
 				updateDirty(file);
@@ -291,7 +302,9 @@
 				else name.type = "button";
 				name.className = "studio-filename";
 				name.title = tableUrl ? `Open ${entry.path} in Table` : entry.path;
-				name.append(icon(tableFileFormat(entry.path) ? "mime-x-office-spreadsheet" : "mime-text-x-generic"), label);
+				const fileIcon = vfsImageType(entry.path) ? "mime-image-x-generic" :
+					tableFileFormat(entry.path) ? "mime-x-office-spreadsheet" : "mime-text-x-generic";
+				name.append(icon(fileIcon), label);
 				const actions = document.createElement("button");
 				actions.type = "button";
 				actions.className = "studio-file-actions";
@@ -333,8 +346,8 @@
 	}
 
 	function updateSaveStatus() {
-		saveGroup.hidden = !active;
-		if (!active) return;
+		saveGroup.hidden = !active?.session;
+		if (!active?.session) return;
 		const state = active.saving ? "saving" : active.error ? "error" : active.dirty ? "dirty" : "saved";
 		saveStatus.dataset.state = state;
 		saveStatus.textContent = { saving: "Saving…", error: "Save failed", dirty: "Unsaved", saved: "Saved" }[state];
@@ -347,11 +360,29 @@
 		languageLabel.textContent = file.language;
 	}
 
+	function showImage(file) {
+		preview.hidden = !file?.image;
+		host.hidden = Boolean(file?.image);
+		if (previewUrl) URL.revokeObjectURL(previewUrl);
+		previewUrl = undefined;
+		previewImage.removeAttribute("src");
+		if (!file?.image) return;
+		const url = previewUrl = URL.createObjectURL(file.image);
+		previewImage.alt = file.name;
+		previewImage.src = url;
+		previewImage.decode().catch(() => {
+			if (previewUrl !== url) return;
+			file.error = "Unable to display this image.";
+			showMessage(file.error, true);
+		});
+	}
+
 	function activate(file, focus = false) {
 		if (active !== file) {
 			const wasDictating = dictation.busy;
 			dictation.cancel();
-			showDictationStatus(file && wasDictating ? "Dictation canceled because the active file changed." : "");
+			showDictationStatus(file?.session && wasDictating ? "Dictation canceled because the active file changed." : "");
+			showImage(file);
 		}
 		if (active) {
 			active.tab.removeAttribute("data-active");
@@ -379,11 +410,12 @@
 		panel.setAttribute("aria-labelledby", file.label.id);
 		updateFilebar(file);
 		selectFile(file.path);
-		editor.setSession(file.session);
-		editor.resize(true);
+		editor.setSession(file.session || emptySession);
+		if (file.session) editor.resize(true);
 		if (focus) {
 			if (narrow.matches) showExplorer(false);
-			editor.focus();
+			if (file.session) editor.focus();
+			else preview.focus({ preventScroll: true });
 		}
 		queueSessionSave(true);
 	}
@@ -395,8 +427,9 @@
 		queueSessionSave();
 	}
 
-	function createTab(path, source, encoded) {
-		const { session, language } = createVfsAceSession(path, source);
+	function createTab(path, { text: source, encoded, image }) {
+		const { session, language } = image ? { language: image.type === "image/svg+xml" ? "SVG image" : "PNG image" } :
+			createVfsAceSession(path, source);
 		const name = vfs.baseName(path);
 		const tab = document.createElement("div");
 		tab.className = "studio-tab";
@@ -421,12 +454,14 @@
 		close.textContent = "×";
 		tab.append(label, close);
 		tablist.append(tab);
-		const file = { path, name, session, language, source, savedValue: session.getValue(), encoded, tab, label, title, close };
+		const file = { path, name, session, language, source, savedValue: session?.getValue(), encoded, image, tab, label, title, close };
 		openFiles.set(path, file);
-		session.on("change", () => updateDirty(file));
-		session.selection.on("changeCursor", () => queueSessionSave());
-		session.on("changeScrollTop", () => queueSessionSave());
-		session.on("changeScrollLeft", () => queueSessionSave());
+		if (session) {
+			session.on("change", () => updateDirty(file));
+			session.selection.on("changeCursor", () => queueSessionSave());
+			session.on("changeScrollTop", () => queueSessionSave());
+			session.on("changeScrollLeft", () => queueSessionSave());
+		}
 		queueSessionSave();
 		label.addEventListener("click", () => {
 			// A text draft from an older session stays accessible until the user saves or discards it.
@@ -450,13 +485,13 @@
 		}
 
 		try {
-			const { text, encoded } = await readSource(path);
+			const source = await readSource(path);
 			if (isBusy(path) || !fileRows.has(path)) return;
-			if (text === undefined) {
+			if (source.text === undefined && !source.image) {
 				if (request === openRequest) showMessage("Use Download in the file menu to open this binary file.");
 				return;
 			}
-			const file = openFiles.get(path) || createTab(path, text, encoded);
+			const file = openFiles.get(path) || createTab(path, source);
 			if (!active || request === openRequest) activate(file, request === openRequest);
 		} catch {
 			if (request === openRequest) showMessage("Unable to open the file.", true);
@@ -470,7 +505,7 @@
 		openFiles.delete(file.path);
 		if (active === file) activate(files[index + 1] || files[index - 1], true);
 		file.tab.remove();
-		file.session.destroy();
+		file.session?.destroy();
 		queueSessionSave(true);
 	}
 
@@ -579,11 +614,11 @@
 			if (isDirectory) {
 				expanded.add(path + "/");
 				queueSessionSave(true);
-			} else if (tableUrl) {
+			} else if (tableUrl || vfsImageType(path)) {
 				queueSessionSave();
 			} else {
 				openRequest += 1;
-				activate(createTab(path, ""), true);
+				activate(createTab(path, { text: "" }), true);
 			}
 			showMessage();
 			await refreshTree();
@@ -639,7 +674,8 @@
 				if (!isFolder) {
 					file.name = file.title.textContent = name;
 					file.close.setAttribute("aria-label", `Close ${name}`);
-					file.language = setVfsAceMode(file.session, target);
+					if (file.session) file.language = setVfsAceMode(file.session, target);
+					else if (active === file) previewImage.alt = name;
 				}
 			}
 			// Keep the map order aligned with the visible tab order.
@@ -709,7 +745,7 @@
 		editor.textInput.getElement().setAttribute("aria-label", "Code editor");
 		refreshSpeechSettings();
 		new ResizeObserver(() => {
-			if (active) editor.resize();
+			if (active?.session) editor.resize();
 		}).observe(host);
 	} catch {
 		treeEmpty.textContent = "Unable to start Code Studio.";

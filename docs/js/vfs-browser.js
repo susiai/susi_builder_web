@@ -49,6 +49,11 @@ function tableFileFormat(path) {
 	return /\.(csv|jsonl|parquet)$/i.exec(path)?.[1].toLowerCase();
 }
 
+function vfsImageType(path) {
+	const format = /\.(png|svg)$/i.exec(path)?.[1].toLowerCase();
+	if (format) return format === "svg" ? "image/svg+xml" : "image/png";
+}
+
 function tableEditorUrl(path) {
 	return tableFileFormat(path) ? "table.html?" + new URLSearchParams({ file: path }) : null;
 }

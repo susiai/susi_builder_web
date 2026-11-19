@@ -8,7 +8,7 @@
 		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
 		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
 		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
-		<link rel="stylesheet" href="css/vfs-editor.css?v=01011d71" />
+		<link rel="stylesheet" href="css/vfs-editor.css?v=8037d153" />
 		<style>
 			#finder-rename {
 				width: min(28rem, calc(100% - 2rem));
@@ -36,6 +36,7 @@
 				white-space: nowrap;
 				text-align: end;
 			}
+			#finder-preview-body > .vfs-image-preview { filter: none; }
 			@media (max-width: 28rem) {
 				#finder-list [data-role="file-details"] { grid-template-columns: minmax(0, 1fr); }
 				#finder-list [data-role="file-size"] { text-align: start; }
@@ -106,10 +107,10 @@
 			</div>
 		</dialog>
 
-		<script defer src="js/vfs.js?v=042c0bb7"></script>
-	<script defer src="js/vfs-projects.js?v=51f57010"></script>
+		<script defer src="js/vfs.js?v=a1bdfbaa"></script>
+	<script defer src="js/vfs-projects.js?v=3f726d94"></script>
 		<script defer src="js/page-settings.js?v=60de7c53"></script>
-		<script defer src="js/vfs-browser.js?v=f36d53fe"></script>
+		<script defer src="js/vfs-browser.js?v=54df53a6"></script>
 		<script defer src="js/vendor/lossless-json-4.3.3.min.js?v=0fa78b94"></script>
 		<script defer src="js/vendor/hyparquet-1.32.0.min.js?v=f5167313"></script>
 		<script defer src="js/table-formats.js?v=a35963de"></script>
@@ -142,6 +143,7 @@
 	let activeDropTarget = null;
 	let refreshRequest = 0;
 	let previewRequest = 0;
+	let previewImageUrl;
 	let pendingUpload;
 	let uploading = false;
 	let renamePath;
@@ -246,7 +248,8 @@
 			icon.alt = "";
 			icon.setAttribute("draggable", "false");
 			icon.dataset.icon = child.type;
-			const fileIcon = isTable ? "mime-x-office-spreadsheet" : "mime-text-x-generic";
+			const fileIcon = vfsImageType(child.path) ? "mime-image-x-generic" :
+				isTable ? "mime-x-office-spreadsheet" : "mime-text-x-generic";
 			icon.src = `icons/${isFile ? fileIcon : "place-folder"}.svg`;
 			row.appendChild(icon);
 
@@ -404,7 +407,14 @@
 	};
 
 	const previewPlaceholder = previewBody.firstElementChild;
+	const releasePreviewImage = () => {
+		if (!previewImageUrl) return;
+		URL.revokeObjectURL(previewImageUrl);
+		previewImageUrl = undefined;
+	};
+
 	const showPreviewPlaceholder = () => {
+		releasePreviewImage();
 		previewTitle.textContent = "Preview";
 		previewBody.replaceChildren(previewPlaceholder);
 	};
@@ -474,6 +484,7 @@
 	const updatePreview = async (path) => {
 		const request = ++previewRequest;
 		const fileName = path.split("/").pop() || "";
+		releasePreviewImage();
 		previewTitle.textContent = fileName;
 		previewBody.textContent = "Loading preview…";
 		const current = () => request === previewRequest && path === selectedPath;
@@ -491,6 +502,16 @@
 			}
 			const contents = await vfs.getasync(path);
 			if (!current()) return;
+			const imageType = vfsImageType(path);
+			if (imageType) {
+				const image = document.createElement("img");
+				image.className = "vfs-image-preview";
+				image.alt = fileName;
+				image.src = previewImageUrl = URL.createObjectURL(new Blob([contents], { type: imageType }));
+				await image.decode();
+				if (current()) previewBody.replaceChildren(image);
+				return;
+			}
 			if (typeof contents !== "string") {
 				previewBody.textContent = "Binary file. Download it to view its contents.";
 				return;
@@ -500,7 +521,9 @@
 			const languageClass = languageHint ? ` language-${languageHint}` : "";
 			previewBody.innerHTML = `<pre><code class="hljs${languageClass}">${highlighted}</code></pre>`;
 		} catch (error) {
-			if (current()) previewBody.textContent = `Unable to load file preview. ${error.message || error}`;
+			if (!current()) return;
+			releasePreviewImage();
+			previewBody.textContent = `Unable to load file preview. ${error.message || error}`;
 		}
 	};
 

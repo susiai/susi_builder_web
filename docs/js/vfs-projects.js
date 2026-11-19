@@ -84,6 +84,12 @@ function createProjectVfs(vfs, root, { guard } = {}) {
 			readBytes: path => vfs.fileSystem.readBytes(resolver.filePath(path))
 		},
 		getasync: (path) => vfs.getasync(resolve(path)),
+		runPython: (path, signal) => {
+			if (root === "/") throw new Error("Choose a project folder to run Python.");
+			const script = filePath(path).slice(root.length);
+			return vfs.runPython ? vfs.runPython(root, script, { guard, signal }) :
+				susiPython.runFile(vfs.fileSystem, root, script, { guard, signal });
+		},
 		ls: (path) => vfs.ls(resolve(path.endsWith("/") ? path : `${path}/`)),
 		put: (path, value, options) => vfs.put(path.endsWith("/") ? resolve(path) : filePath(path), value, { ...options, guard }),
 		applyDiff: (path, diff) => vfs.applyDiff(filePath(path), diff, { guard }),

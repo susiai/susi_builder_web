@@ -374,6 +374,16 @@ html:has(#studio-page) {
 	min-height: 0;
 }
 
+#studio-editor[hidden] { display: none; }
+
+#studio-image-preview:not([hidden]) {
+	display: grid;
+	grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+	place-items: center;
+	min-height: 0;
+	padding: 1rem;
+}
+
 #studio-empty:not([hidden]) {
 	display: grid;
 	place-content: center;
