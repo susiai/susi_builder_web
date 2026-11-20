@@ -14,6 +14,12 @@ function createChatWorkspaceAccess(vfs, root, projects = root + "Projects/") {
 	function writeOptions(fence, signal) {
 		return fence ? { guard: { path: resolve(fence.path), owner: fence.owner, runId: fence.runId, signal } } : {};
 	}
+	function runScript(runtime, signal, folder, script, fence) {
+		if (!isVfsPreviewFolder(folder) || !folder.startsWith("/Projects/") || folder === "/Projects/") {
+			throw new Error("Choose an app project folder to run the script.");
+		}
+		return runtime.runFile(vfs.fileSystem, resolve(folder), script, { ...writeOptions(fence, signal), signal });
+	}
 	async function createFolder(name, parent, entries) {
 		if (typeof name !== "string" || !name.trim() || name === "." || name === ".." ||
 			/[\\/\x00-\x1f\x7f]/.test(name)) throw new Error("Invalid project folder name.");
@@ -28,12 +34,8 @@ function createChatWorkspaceAccess(vfs, root, projects = root + "Projects/") {
 		stat: (_signal, path) => vfs.fileSystem.stat(resolve(path)),
 		readdir: (_signal, path) => vfs.fileSystem.readdir(resolve(path)),
 		readFile: (_signal, path) => vfs.fileSystem.readFile(resolve(path)),
-		runPython: (signal, folder, script, fence) => {
-			if (!folder.startsWith("/Projects/") || folder === "/Projects/" || !isVfsPreviewFolder(folder)) {
-				throw new Error("Choose an app project folder to run Python.");
-			}
-			return susiPython.runFile(vfs.fileSystem, resolve(folder), script, { ...writeOptions(fence, signal), signal });
-		},
+		runPython: (signal, folder, script, fence) => runScript(susiPython, signal, folder, script, fence),
+		runJavaScript: (signal, folder, script, fence) => runScript(susiJavaScript, signal, folder, script, fence),
 		put: (signal, path, value, fence) => vfs.put(resolve(path), value, writeOptions(fence, signal)),
 		edit: (signal, path, edits, fence) => vfs.editFile(resolve(path), edits, writeOptions(fence, signal)),
 		remove: (signal, path, fence) => vfs.rm(resolve(path), writeOptions(fence, signal)),
@@ -71,6 +73,8 @@ function createChatWorkspace(call) {
 		getasync,
 		runPython: (folder, script, { guard, signal } = {}) =>
 			invoke("runPython", [folder, script], { guard: { ...guard, signal } }),
+		runJavaScript: (folder, script, { guard, signal } = {}) =>
+			invoke("runJavaScript", [folder, script], { guard: { ...guard, signal } }),
 		baseName: path => path.replace(/\/$/, "").split("/").at(-1),
 		ls: path => call("list", [path]),
 		mkdir: path => call("mkdir", [path]),

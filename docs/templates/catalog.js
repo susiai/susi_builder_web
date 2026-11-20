@@ -644,7 +644,9 @@ globalThis.templateCatalog = {
       "license": "MIT, LGPL-2.1-or-later, Apache-2.0 and bundled notices",
       "files": [
         {"source": "docs/js/vfs.js", "path": "js/chat-workbench/vfs.js", "rawScript": true},
+        {"source": "docs/js/workspace-runner.js", "path": "js/chat-workbench/workspace-runner.js", "rawScript": true},
         {"source": "docs/js/python-runner.js", "path": "js/chat-workbench/python-runner.js", "rawScript": true},
+        {"source": "docs/js/javascript-runner.js", "path": "js/chat-workbench/javascript-runner.js", "rawScript": true},
         {"source": "docs/js/browser-client.js", "path": "js/chat-workbench/browser-client.js", "rawScript": true},
         {"source": "docs/js/agent-runtime.js", "path": "js/chat-workbench/agent-runtime.js", "rawScript": true},
         {"source": "docs/js/workstation-state.js", "path": "js/chat-workbench/workstation-state.js", "rawScript": true},
@@ -669,6 +671,8 @@ globalThis.templateCatalog = {
         {"source": "docs/js/vendor/markdown-it-LICENSE.txt", "path": "js/vendor/markdown-it-LICENSE.txt"},
         {"source": "docs/js/vendor/just-bash-3.6.1.browser.js", "path": "js/vendor/just-bash-3.6.1.browser.js"},
         {"source": "docs/js/vendor/just-bash-LICENSE.txt", "path": "js/vendor/just-bash-LICENSE.txt"},
+        {"source": "docs/js/vendor/quickjs-0.32.0.browser.js", "path": "js/vendor/quickjs-0.32.0.browser.js", "rawScript": true},
+        {"source": "docs/js/vendor/quickjs-LICENSE.txt", "path": "js/vendor/quickjs-LICENSE.txt"},
         {"source": "docs/js/vendor/officeparser-8.9.0.browser.slim.iife.js", "path": "js/vendor/officeparser-8.9.0.browser.slim.iife.js"},
         {"source": "docs/js/vendor/officeparser-LICENSE.txt", "path": "js/vendor/officeparser-LICENSE.txt"},
         {"source": "docs/js/vendor/pdfjs-6.5.438.worker.js", "path": "js/vendor/pdfjs-6.5.438.worker.js"},
@@ -692,7 +696,9 @@ globalThis.templateCatalog = {
       ],
       "bundle": [
         "js/chat-workbench/vfs.js",
+        "js/chat-workbench/workspace-runner.js",
         "js/chat-workbench/python-runner.js",
+        "js/chat-workbench/javascript-runner.js",
         "js/chat-workbench/browser-client.js",
         "js/chat-workbench/agent-runtime.js",
         "js/chat-workbench/workstation-state.js",
@@ -714,7 +720,7 @@ globalThis.templateCatalog = {
       ],
       "scripts": [],
       "styles": [],
-      "bytes": 10247552
+      "bytes": 11134148
     }
   ],
   "purposes": [

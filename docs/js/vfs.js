@@ -803,12 +803,12 @@ function createVfsFileSystem(database, directoryRange) {
       return (await readFile(path)).bytes;
     },
 
-    async snapshotTree(path, { exclude = [], maxEntries, maxBytes, signal } = {}) {
+    async snapshotTree(path, { exclude = [], maxEntries, maxBytes, signal, label = 'Python' } = {}) {
       const entries = await read(async (store) => {
         const { id } = await requireDirectory(store, resolvePath('/', path));
         const keys = (await vfsRequest(store.getAllKeys(directoryRange(id, true))))
           .filter(key => !exclude.includes(key.slice(id.length).split('/')[0]));
-        if (keys.length > maxEntries) throw new Error('The Python workspace has too many files.');
+        if (keys.length > maxEntries) throw new Error(`The ${label} workspace has too many files.`);
         let total = 0;
         const result = [];
         for (const key of keys) {
@@ -816,7 +816,7 @@ function createVfsFileSystem(database, directoryRange) {
           const record = await vfsRequest(store.get(key));
           const entry = treeEntry(record);
           total += entry.size;
-          if (total > maxBytes) throw new Error(`The Python workspace exceeds ${maxBytes / (1024 * 1024)} MiB.`);
+          if (total > maxBytes) throw new Error(`The ${label} workspace exceeds ${maxBytes / (1024 * 1024)} MiB.`);
           result.push({ ...entry, path: key.slice(id.length), value: key.endsWith('/') ? null : record.value });
         }
         return result;
@@ -825,7 +825,7 @@ function createVfsFileSystem(database, directoryRange) {
         data: value === null ? null : value instanceof Blob ? new Uint8Array(await value.arrayBuffer()) : bytes(value) })));
     },
 
-    applyTreeChanges(path, changes, { guard, signal } = {}) {
+    applyTreeChanges(path, changes, { guard, signal, label = 'Python' } = {}) {
       const root = directoryKey(resolvePath('/', path));
       // Validate all expected entries before applying a single transaction. Unrelated edits can proceed.
       return vfsTransaction(database, 'readwrite', async (store) => {
@@ -833,14 +833,14 @@ function createVfsFileSystem(database, directoryRange) {
         for (const { path: relative, before } of changes) {
           if (!relative || relative.startsWith('/') || /[\\\x00-\x1f\x7f]/.test(relative) ||
             relative.replace(/\/$/, '').split('/').some(part => !part || part === '.' || part === '..')) {
-            throw new Error('Invalid Python workspace path.');
+            throw new Error(`Invalid ${label} workspace path.`);
           }
           const record = await vfsRequest(store.get(root + relative));
           const current = record && treeEntry(record);
           if (Boolean(current) !== Boolean(before) || (current &&
             (current.mtime !== before.mtime || current.mode !== before.mode || current.size !== before.size ||
               (before.data && !(record.value instanceof Blob) && bytes(record.value).some((byte, i) => byte !== before.data[i]))))) {
-            throw new Error(`Workspace entry changed while Python was running: ${relative}`);
+            throw new Error(`Workspace entry changed while ${label} was running: ${relative}`);
           }
         }
         // Removals are ordered children first, then additions are ordered parents first.
@@ -850,7 +850,7 @@ function createVfsFileSystem(database, directoryRange) {
           const directory = key.endsWith('/');
           if (!after) {
             if (directory && await vfsRequest(store.getKey(directoryRange(key, true))) !== undefined) {
-              throw new Error(`Workspace directory changed while Python was running: ${relative}`);
+              throw new Error(`Workspace directory changed while ${label} was running: ${relative}`);
             }
             await vfsRequest(store.delete(key));
           } else {

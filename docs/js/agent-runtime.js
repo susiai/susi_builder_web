@@ -62,7 +62,8 @@ async function writeAgentProfile(id, changes, expected) {
 }
 
 function agentToolsForProfile(tools, profile, browserAvailable) {
-	const writes = new Set(["edit_file", "write_file", "rename_file", "delete_file", "copy_file", "mkdir", "run_python"]);
+	const writes = new Set(["edit_file", "write_file", "rename_file", "delete_file", "copy_file", "mkdir",
+		"run_python", "run_javascript"]);
 	return tools.filter(({ function: tool }) => {
 		if (writes.has(tool.name)) return profile.capabilities.includes("files.write");
 		if (tool.name.startsWith("mcp_")) return profile.capabilities.includes("mcp.tools");

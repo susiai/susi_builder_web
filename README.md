@@ -24,6 +24,9 @@ Speech-to-text and speech output are off until you configure them there.
   data workspace, or game from a starter with a live preview. [Template guide](docs/templates/README.md)
 - **Chat** streams replies and gives the agent tools to read, search, and edit files in the selected app.
   The agent can call `run_python` with the path to a saved Python script in the active project.
+  It can also call `run_javascript` with the path to a saved JavaScript module. The isolated runtime supports local
+  imports, `console` output, and `readFile`, `writeFile`, `mkdir`, `readdir`, and `unlink` from `node:fs/promises`.
+  JavaScript paths resolve from the project root at `/workspace`. Successful runs save their file changes together.
   Paste or attach images and use LFM3-VL-2B on WebGPU or a vision-capable API model to read them.
   Attach text, PDF, XLSX, DOCX, PPTX, or audio files. Audio attachments use the selected speech-to-text model.
   Browser chat models run offline once downloaded to `/Models/Chat/`. Qwen3 0.6B and LFM2.5 350M support WebGPU

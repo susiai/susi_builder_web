@@ -74,6 +74,12 @@ function createProjectVfs(vfs, root, { guard } = {}) {
 	}
 	const resolve = path => resolver.resolve(withinProject(path));
 	const filePath = path => resolver.filePath(withinProject(path));
+	function runScript(path, signal, method, runtime, label) {
+		if (root === "/") throw new Error(`Choose a project folder to run ${label}.`);
+		const script = filePath(path).slice(root.length);
+		return vfs[method] ? vfs[method](root, script, { guard, signal }) :
+			runtime.runFile(vfs.fileSystem, root, script, { guard, signal });
+	}
 	return {
 		projectPath: path => `./${resolve(path).slice(root.length)}`,
 		// The search engine walks paths in its own project-rooted filesystem after resolving the tool argument.
@@ -84,12 +90,8 @@ function createProjectVfs(vfs, root, { guard } = {}) {
 			readBytes: path => vfs.fileSystem.readBytes(resolver.filePath(path))
 		},
 		getasync: (path) => vfs.getasync(resolve(path)),
-		runPython: (path, signal) => {
-			if (root === "/") throw new Error("Choose a project folder to run Python.");
-			const script = filePath(path).slice(root.length);
-			return vfs.runPython ? vfs.runPython(root, script, { guard, signal }) :
-				susiPython.runFile(vfs.fileSystem, root, script, { guard, signal });
-		},
+		runPython: (path, signal) => runScript(path, signal, "runPython", susiPython, "Python"),
+		runJavaScript: (path, signal) => runScript(path, signal, "runJavaScript", susiJavaScript, "JavaScript"),
 		ls: (path) => vfs.ls(resolve(path.endsWith("/") ? path : `${path}/`)),
 		put: (path, value, options) => vfs.put(path.endsWith("/") ? resolve(path) : filePath(path), value, { ...options, guard }),
 		applyDiff: (path, diff) => vfs.applyDiff(filePath(path), diff, { guard }),

@@ -1264,6 +1264,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 					if (call.function.name === "webfetch") activity = "Fetching a webpage…";
 					if (call.function.name === "read_attachments") activity = "Reading attachments…";
 					if (call.function.name === "run_python") activity = "Running Python…";
+					if (call.function.name === "run_javascript") activity = "Running JavaScript…";
 					setStatus(call.function.name.startsWith("browser_") ? "Using Browser · approvals appear there" : activity);
 					view.note.textContent = activity;
 					await workstationStore.append(activeRun.id, { type: "tool-request", name: call.function.name,

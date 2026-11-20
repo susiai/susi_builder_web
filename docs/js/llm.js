@@ -57,7 +57,8 @@ function normalizeAgentToolDescriptions(descriptions) {
         if (!Object.hasOwn(current, name) && Object.hasOwn(current, legacy)) current[name] = current[legacy];
         delete current[legacy];
     }
-    for (const name of ['get_datetime', 'calculator', 'search_skills', 'webfetch', 'read_attachments', 'run_python', ...FILE_TOOL_NAMES,
+    for (const name of ['get_datetime', 'calculator', 'search_skills', 'webfetch', 'read_attachments',
+        'run_python', 'run_javascript', ...FILE_TOOL_NAMES,
         ...BROWSER_TOOL_SCHEMAS.map(tool => tool.name)]) {
         if (typeof current[name] === 'string') current[name] = agentToolDescription(current[name]);
     }
@@ -254,6 +255,30 @@ function createLLM(options = {}) {
     const filePathDescription = options.vfs ? 'Path relative to the project, such as ./index.html or ./assets/style.css.'
         : 'Absolute file path starting with /.';
 
+    function scriptTool(name, runtime, language, description) {
+        return {
+            definition: {
+                type: 'function',
+                function: {
+                    name, description,
+                    parameters: {
+                        type: 'object',
+                        properties: { path: { type: 'string', description: `Project-relative path to a saved ${language} script.` } },
+                        required: ['path'], additionalProperties: false
+                    }
+                }
+            },
+            handler: async (_call, context, args) => {
+                if (typeof args.path !== 'string' || Object.keys(args).length !== 1) {
+                    throw new Error(`Provide only the path to a saved ${language} file.`);
+                }
+                const vfs = await (typeof options.vfs === 'function' ? options.vfs(context) : options.vfs);
+                if (!vfs?.[runtime]) throw new Error(`Open a project to run ${language}.`);
+                return vfs[runtime](args.path, context.signal);
+            }
+        };
+    }
+
     const toolLibrary = {
         get_datetime: {
             definition: {
@@ -334,29 +359,14 @@ function createLLM(options = {}) {
             },
             handler: () => options.attachments ?? []
         },
-        run_python: {
-            definition: {
-                type: 'function',
-                function: {
-                    name: 'run_python',
-                    description: 'Run a saved Python script from the current project directory. Returns stdout, stderr, ' +
-                        'and the exit code. File changes made inside the project are saved when the script finishes.',
-                    parameters: {
-                        type: 'object',
-                        properties: { path: { type: 'string', description: 'Project-relative path to a saved Python script.' } },
-                        required: ['path'], additionalProperties: false
-                    }
-                }
-            },
-            handler: async (_call, context, args) => {
-                if (typeof args.path !== 'string' || Object.keys(args).length !== 1) {
-                    throw new Error('Provide only the path to a saved Python file.');
-                }
-                const vfs = await (typeof options.vfs === 'function' ? options.vfs(context) : options.vfs);
-                if (!vfs?.runPython) throw new Error('Open a project to run Python.');
-                return vfs.runPython(args.path, context.signal);
-            }
-        },
+        run_python: scriptTool('run_python', 'runPython', 'Python',
+            'Run a saved Python script from the current project directory. Returns stdout, stderr, ' +
+            'and the exit code. File changes made inside the project are saved when the script finishes.'),
+        run_javascript: scriptTool('run_javascript', 'runJavaScript', 'JavaScript',
+            'Run a saved JavaScript module in an isolated runtime. Use console.log for output and import ' +
+            'readFile, writeFile, mkdir, readdir, or unlink from node:fs/promises to work with project files. ' +
+            'Paths are relative to the project root (/workspace). Local module imports and top-level await are supported. ' +
+            'Returns stdout, stderr, and the exit code. File changes are saved on success.'),
         read_file: {
             definition: {
                 type: 'function',
