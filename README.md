@@ -27,7 +27,7 @@ Speech-to-text and speech output are off until you configure them there.
   It can also call `run_javascript` with the path to a saved JavaScript module. The isolated runtime supports local
   imports, `console` output, and `readFile`, `writeFile`, `mkdir`, `readdir`, and `unlink` from `node:fs/promises`.
   JavaScript paths resolve from the project root at `/workspace`. Successful runs save their file changes together.
-  Paste or attach images and use LFM3-VL-2B on WebGPU or a vision-capable API model to read them.
+  Paste or attach images and use LFM3-VL-2B or Qwen3.5 4B on WebGPU, or a vision-capable API model.
   Attach text, PDF, XLSX, DOCX, PPTX, or audio files. Audio attachments use the selected speech-to-text model.
   Browser chat models run offline once downloaded to `/Models/Chat/`. Qwen3 0.6B and LFM2.5 350M support WebGPU
   and WASM. Qwen3 1.7B, Qwen3.5 2B, LFM2.5 1.2B Instruct, and LFM3 1.7B use WebGPU.

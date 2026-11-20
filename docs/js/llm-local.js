@@ -93,6 +93,30 @@ globalThis.llmLocal = (() => {
 			]
 		},
 		{
+			id: "qwen3.5-4b-webgpu", modelId: "qwen3.5-4b", label: "Qwen3.5 4B",
+			detail: "Vision · text and images · 3.0 GB download", device: "webgpu", dtype: "q4f16",
+			shaderF16: true, vision: true, toolFormat: "xml",
+			repo: "onnx-community/Qwen3.5-4B-ONNX-OPT", revision: "bb072268d0912bdc5cf4f41c8c6f53a03fd68624",
+			files: [
+				["config.json", 3198, "c6f9834460177e3821e035900320fa24bd11ad1c9f14bfe2e78e4398e38c4937"],
+				["generation_config.json", 248, "dc0cbe66543f310896469b7b1448af792f403293a1080baaf04d586c57b23e48"],
+				["chat_template.jinja", 7756, "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"],
+				["processor_config.json", 1300, "14932921ca485d458a04dafd8069fbb0a4505622a48208d19ed247115801385b"],
+				["preprocessor_config.json", 336, "6a970fd06f30e6943b3e2c14d5d3b42d49b06cf99b99103d56689bef462d90f8"],
+				["tokenizer.json", 19226111, "89da80cc6689bef4d90cc1028249436975ffb0814618f1d93c65310e05801a9b"],
+				["tokenizer_config.json", 10070, "2653056d02b8cf4452fa17e0048ec1d1504a2650d719ea0f928e0d216921f993"],
+				["onnx/decoder_model_merged_q4f16.onnx", 933554, "8f159924389ced435ff445b9aaf1604d7de7756961299568f106990415bedcbb"],
+				["onnx/decoder_model_merged_q4f16.onnx_data", 2065635328,
+					"83a2b12931978d2a3577f1f1a19e7ec42b87a760e87567dd26313fd933dcddd3"],
+				["onnx/decoder_model_merged_q4f16.onnx_data_1", 367513600,
+					"fc1bb145d8839272a87c71e0cb4d34832a0d7bb4de06ab4fb74fea1aa6ddf7e5"],
+				["onnx/embed_tokens_q4f16.onnx", 1064, "0e5fe965e5575b6428b7dea82661ed09bf7abadf29450c279e46e8113745110e"],
+				["onnx/embed_tokens_q4f16.onnx_data", 367513600, "fc1bb145d8839272a87c71e0cb4d34832a0d7bb4de06ab4fb74fea1aa6ddf7e5"],
+				["onnx/vision_encoder_q4f16.onnx", 394142, "68b093637448ec24a8f364546be8ce1d7ce6712b2c6df3de033e38382138ba32"],
+				["onnx/vision_encoder_q4f16.onnx_data", 198159360, "c52931db472718a0b045b03487497e01b29a63028944bcc57019c20ef4ea15ff"]
+			]
+		},
+		{
 			id: "lfm3-1.7b-webgpu", modelId: "lfm3-1.7b", label: "LFM3 1.7B",
 			device: "webgpu", dtype: "q4f16", shaderF16: true, toolFormat: "xml", prefillChunkSize: 256,
 			repo: "onnx-community/LFM3-1.7B-ONNX", revision: "ab9fec4c681a25bec3b48b0b97a62fc2660a2985",
@@ -654,7 +678,11 @@ globalThis.llmLocal = (() => {
 						return RawImage.fromBlob(new Blob([bytes], { type: url.slice(5, url.indexOf(";")) }));
 					}));
 					const prompt = processor.apply_chat_template(conversation, templateOptions);
-					inputs = await processor(images.length ? images : null, prompt, { add_special_tokens: false });
+					const imageInputs = images.length ? images : null;
+					const processorOptions = { add_special_tokens: false };
+					inputs = model.config.model_type === "qwen3_5"
+						? await processor(prompt, imageInputs, processorOptions)
+						: await processor(imageInputs, prompt, processorOptions);
 				} else inputs = tokenizer.apply_chat_template(inputMessages, templateOptions);
 				const promptTokens = inputs.input_ids.dims.at(-1);
 				const limit = Math.min(maxTokens, contextLimit - promptTokens);
