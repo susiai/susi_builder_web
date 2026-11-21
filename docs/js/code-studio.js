@@ -1,11 +1,11 @@
 "use strict";
 
 (async () => {
-	function parquetEditorUrl(path) {
-		return tableFileFormat(path) === "parquet" ? tableEditorUrl(path) : null;
+	function binaryTableEditorUrl(path) {
+		return /\.(parquet|xlsx)$/i.test(path) ? tableEditorUrl(path) : null;
 	}
 	const requested = new URLSearchParams(location.search).get("file");
-	const requestedTable = requested?.startsWith("/") && parquetEditorUrl(requested);
+	const requestedTable = requested?.startsWith("/") && binaryTableEditorUrl(requested);
 	if (requestedTable) {
 		window.location.replace(requestedTable);
 		return;
@@ -296,14 +296,14 @@
 				const row = document.createElement("div");
 				row.dataset.studioFile = entry.path;
 				fileRows.set(entry.path, row);
-				const tableUrl = parquetEditorUrl(entry.path);
+				const tableUrl = binaryTableEditorUrl(entry.path);
 				const name = document.createElement(tableUrl ? "a" : "button");
 				if (tableUrl) name.href = tableUrl;
 				else name.type = "button";
 				name.className = "studio-filename";
-				name.title = tableUrl ? `Open ${entry.path} in Table` : entry.path;
+				name.title = tableUrl ? `Open ${entry.path} in Table editor` : entry.path;
 				const fileIcon = vfsImageType(entry.path) ? "mime-image-x-generic" :
-					tableFileFormat(entry.path) ? "mime-x-office-spreadsheet" : "mime-text-x-generic";
+					tableEditorUrl(entry.path) ? "mime-x-office-spreadsheet" : "mime-text-x-generic";
 				name.append(icon(fileIcon), label);
 				const actions = document.createElement("button");
 				actions.type = "button";
@@ -465,7 +465,7 @@
 		queueSessionSave();
 		label.addEventListener("click", () => {
 			// A text draft from an older session stays accessible until the user saves or discards it.
-			const tableUrl = !file.dirty && parquetEditorUrl(file.path);
+			const tableUrl = !file.dirty && binaryTableEditorUrl(file.path);
 			if (tableUrl) navigateTo(tableUrl);
 			else activate(file, true);
 		});
@@ -476,7 +476,7 @@
 	async function openFile(path) {
 		if (isBusy(path)) return;
 		const request = ++openRequest;
-		const tableUrl = parquetEditorUrl(path);
+		const tableUrl = binaryTableEditorUrl(path);
 		if (tableUrl) return navigateTo(tableUrl);
 		const existing = openFiles.get(path);
 		if (existing) {
@@ -598,7 +598,7 @@
 			return;
 		}
 		const path = directory + name;
-		const tableUrl = !isDirectory && parquetEditorUrl(path);
+		const tableUrl = !isDirectory && binaryTableEditorUrl(path);
 		if (isBusy(path) || openFiles.has(path)) {
 			showMessage(`An entry named ${name} already exists.`, true);
 			return;

@@ -110,10 +110,10 @@
 		<script defer src="js/vfs.js?v=a4b76514"></script>
 	<script defer src="js/vfs-projects.js?v=08fcfe82"></script>
 		<script defer src="js/page-settings.js?v=60de7c53"></script>
-		<script defer src="js/vfs-browser.js?v=54df53a6"></script>
+		<script defer src="js/vfs-browser.js?v=6577e771"></script>
 		<script defer src="js/vendor/lossless-json-4.3.3.min.js?v=0fa78b94"></script>
 		<script defer src="js/vendor/hyparquet-1.32.0.min.js?v=f5167313"></script>
-		<script defer src="js/table-formats.js?v=a35963de"></script>
+		<script defer src="js/table-formats.js?v=89c789e9"></script>
 		<script defer src="js/vendor/zip-2.25.0.min.js?v=49bb1d59"></script>
 		<script defer src="js/vfs-zip.js?v=5a1453de"></script>
 		<script defer src="js/highlight.min.js?v=b3d289c6"></script>
@@ -216,7 +216,7 @@
 		nodes.forEach((child) => {
 			const isExpanded = expandedPaths.has(child.path);
 			const isFile = child.type === "file";
-			const isTable = isFile && Boolean(tableFileFormat(child.path));
+			const isTable = isFile && Boolean(tableEditorUrl(child.path));
 			const li = document.createElement("li");
 			li.dataset.path = child.path;
 			li.dataset.kind = child.type;
@@ -275,7 +275,7 @@
 			actions.dataset.role = "actions";
 
 			if (isFile) {
-				const editTitle = isTable ? `Edit ${child.name} in Table` : `Edit ${child.name}`;
+				const editTitle = isTable ? `Edit ${child.name} in Table editor` : `Edit ${child.name}`;
 				actions.appendChild(createRowAction("edit", editTitle, "action-edit-pencil"));
 			} else {
 				addWebsiteActions(child, actions);
@@ -491,6 +491,11 @@
 
 		try {
 			const vfs = await window.vfsReady;
+			if (/\.xlsx$/i.test(path)) {
+				const link = document.createElement("a"); link.href = tableEditorUrl(path); link.textContent = "Open Excel workbook in Table editor";
+				if (current()) previewBody.replaceChildren(link);
+				return;
+			}
 			const format = tableFileFormat(path);
 			if (format) {
 				const maxRows = 25;

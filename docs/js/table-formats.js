@@ -12,7 +12,7 @@ const { tableFormats, tableParquet } = (() => {
 		return typeof value === "string" ? value : json(value);
 	}
 
-	function csvSheet(text, bom, encoding, maxRows) {
+	function csvSheet(text, bom, encoding, maxRows, { delimiter: override, header: hasHeader = true, clipboard = false } = {}) {
 		// Look for the separator in the first logical record, excluding quoted fields.
 		const counts = new Map([[",", 0], [";", 0], ["\t", 0]]);
 		let quoted = false;
@@ -21,7 +21,8 @@ const { tableFormats, tableParquet } = (() => {
 			else if (!quoted && (ch === "\r" || ch === "\n")) break;
 			else if (!quoted && counts.has(ch)) counts.set(ch, counts.get(ch) + 1);
 		}
-		const delimiter = [...counts].sort((a, b) => b[1] - a[1])[0][0];
+		const delimiter = override || [...counts].sort((a, b) => b[1] - a[1])[0][0];
+		const limit = maxRows + Number(hasHeader);
 		const records = [];
 		let row = [], field = "", closed = false, eol = "";
 		quoted = false;
@@ -39,21 +40,21 @@ const { tableFormats, tableParquet } = (() => {
 				if (crlf) i++;
 				row.push(field); records.push(row);
 				row = []; field = ""; closed = false;
-				if (records.length > maxRows) break; // The first record is the header.
+				if (records.length >= limit) break;
 			} else if (ch === '"' && !field && !closed) {
 				quoted = true;
 			} else {
-				if (ch === '"' || closed) throw new Error(`Invalid quote in CSV record ${records.length + 1}.`);
+				if ((ch === '"' && !clipboard) || closed) throw new Error(`Invalid quote in CSV record ${records.length + 1}.`);
 				field += ch;
 			}
 		}
 		if (quoted) throw new Error(`Unclosed quote in CSV record ${records.length + 1}.`);
 		const trailing = /[\r\n]$/.test(text);
-		if (text && !trailing && records.length <= maxRows) { row.push(field); records.push(row); }
-		const header = records.shift() || [];
+		if (text && !trailing && records.length < limit) { row.push(field); records.push(row); }
+		const header = hasHeader ? records.shift() || [] : [];
 		const width = records.reduce((n, r) => Math.max(n, r.length), header.length);
-		const columns = Array.from({ length: width }, (_, i) => ({ name: header[i] ?? "", implicit: i >= header.length }));
-		return { format: "csv", columns, rows: records, csv: { delimiter, eol: eol || "\r\n", trailing, bom, encoding } };
+		const columns = Array.from({ length: width }, (_, i) => ({ name: hasHeader ? header[i] ?? "" : "Column " + (i + 1), implicit: hasHeader && i >= header.length }));
+		return { format: "csv", columns, rows: records, csv: { delimiter, header: hasHeader, eol: eol || "\r\n", trailing, bom, encoding } };
 	}
 
 	function jsonSheet(text, maxRows) {
@@ -88,12 +89,12 @@ const { tableFormats, tableParquet } = (() => {
 		return { format: "jsonl", columns, rows, values };
 	}
 
-	async function read(format, bytes, maxRows = Infinity) {
+	async function read(format, bytes, maxRows = Infinity, csvOptions) {
 		if (format === "parquet") return parquet.read(bytes, maxRows);
 		if (format === "csv") {
 			const { text, encoding } = decodeTableText(format, bytes);
 			const bom = text.startsWith("\uFEFF");
-			return csvSheet(bom ? text.slice(1) : text, bom, encoding, maxRows);
+			return csvSheet(bom ? text.slice(1) : text, bom, encoding, maxRows, csvOptions);
 		}
 		if (format === "jsonl") return jsonSheet(decodeTableText(format, bytes).text.replace(/^\uFEFF/, ""), maxRows);
 		throw new Error("Choose a CSV, JSONL or Parquet file.");
@@ -132,7 +133,8 @@ const { tableFormats, tableParquet } = (() => {
 		// A short CSV header and short records can be preserved independently.
 		const header = columns.map(c => c.name);
 		while (header.length && columns[header.length - 1].implicit) header.pop();
-		const lines = header.length || rows.length ? [line(header, true), ...rows.map(row => line(row))] : [];
+		const lines = rows.map(row => line(row));
+		if (sheet.csv?.header !== false && (header.length || rows.length)) lines.unshift(line(header, true));
 		const text = (bom ? "\uFEFF" : "") + lines.join(eol) + (trailing && lines.length ? eol : "");
 		return encodeTableText(text, sheet.csv?.encoding);
 	}
@@ -456,7 +458,7 @@ const { tableFormats, tableParquet } = (() => {
 	})();
 
 	return {
-		tableFormats: { read, write, extension: tableFileFormat, textValue, json, kind, parseCell, number, isNumber, record },
+		tableFormats: { read, write, parseTSV: text => csvSheet(text, false, "utf-8", Infinity, { delimiter: "\t", header: false, clipboard: true }).rows, extension: tableFileFormat, textValue, json, kind, parseCell, number, isNumber, record },
 		tableParquet: parquet
 	};
 })();

@@ -55,7 +55,7 @@ function vfsImageType(path) {
 }
 
 function tableEditorUrl(path) {
-	return tableFileFormat(path) ? "table.html?" + new URLSearchParams({ file: path }) : null;
+	return (tableFileFormat(path) || /\.xlsx$/i.test(path)) ? "table.html?" + new URLSearchParams({ file: path }) : null;
 }
 
 function decodeTableText(format, bytes) {

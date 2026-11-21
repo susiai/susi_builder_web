@@ -2,60 +2,107 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
 		<meta name="color-scheme" content="dark" />
-		<title>SUSI Builder Table</title>
+		<title>SUSI Builder Table editor</title>
 		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
 		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
 		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
-		<link rel="stylesheet" href="css/table.css?v=305e80ff" />
+		<link rel="stylesheet" href="css/table.css?v=8a017efc" />
 		<script defer src="js/vfs.js?v=a4b76514"></script>
 		<script defer src="js/page-settings.js?v=60de7c53"></script>
-		<script defer src="js/vfs-browser.js?v=54df53a6"></script>
+		<script defer src="js/vfs-browser.js?v=6577e771"></script>
 		<script defer src="js/vendor/lossless-json-4.3.3.min.js?v=0fa78b94"></script>
 		<script defer src="js/vendor/hyparquet-1.32.0.min.js?v=f5167313"></script>
-		<script defer src="js/table-formats.js?v=a35963de"></script>
-		<script defer src="js/table.js?v=6f81d910"></script>
+		<script defer src="js/llm-client.js?v=de22394e"></script>
+		<script defer src="js/llm.js?v=1d26062a"></script>
+		<script defer src="js/transformer-model-assets.js?v=9de616b6"></script>
+		<script defer src="js/llm-local.js?v=9e372354"></script>
+		<script defer src="js/table-formats.js?v=89c789e9"></script>
+		<script defer src="js/table-operations.js?v=3b0d7514"></script>
+		<script defer src="js/table-sheet.js?v=7cbd570b"></script>
+		<script defer src="js/table-formulas.js?v=6b1597e7"></script>
+		<script defer src="js/table-model.js?v=6bddaab0"></script>
+		<script defer src="js/table-charts.js?v=7759b231"></script>
+		<script defer src="js/table-chart-xlsx.js?v=935143e2"></script>
+		<script defer src="js/table-workbook.js?v=a01dfde8"></script>
+		<script defer src="js/table-autocomplete.js?v=1d1178d4"></script>
+		<script defer src="js/table-formula-help.js?v=1e0968d4"></script>
+		<script defer src="js/table-reference-picker.js?v=8a208c8b"></script>
+		<script defer src="js/table-view-controls.js?v=aea35563"></script>
+		<script defer src="js/table.js?v=a1f767ad"></script>
 		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
 	</head>
 	<body id="table-page">
 		<iframe id="site-menu" title="Pages" src="navigation.html#table"></iframe>
 		<main id="table-workspace">
-			<header id="table-heading">
-				<hgroup>
-					<h1>Table</h1>
-					<p>Create and edit tables in CSV (.csv), JSON Lines (.jsonl), or Apache Parquet (.parquet) format.</p>
-				</hgroup>
-				<nav aria-label="Table files">
-					<button type="button" id="new-table">New</button>
-					<button type="button" id="open-table">Open…</button>
-					<button type="button" id="save-table">Save</button>
-					<button type="button" id="save-as">Save as…</button>
-				</nav>
-			</header>
 			<div id="sheet">
-				<div id="sheet-title"><span class="sheet-icon" aria-hidden="true"></span>
-					<strong id="file-name">Untitled.csv</strong><span id="file-location">New table</span></div>
-				<div id="sheet-tools" role="group" aria-label="Edit table">
-					<button type="button" id="undo" title="Undo (Ctrl or Command + Z)">Undo</button>
-					<button type="button" id="redo" title="Redo">Redo</button>
-					<button type="button" id="add-row">+ Row</button>
-					<button type="button" id="add-column">+ Column</button>
-					<button type="button" id="rename-column">Rename column</button>
-					<button type="button" id="remove-row">Delete row</button>
-					<button type="button" id="remove-column">Delete column</button>
+				<header id="sheet-title">
+					<h1>Table editor</h1><span id="file-name">Untitled.xlsx</span><span id="unsaved" hidden>Unsaved</span>
+					<span id="file-location">New workbook</span>
+					<nav aria-label="File and history"><button id="new-table">New table</button><button id="new-workbook">New workbook</button><button id="open-table">Open…</button>
+						<button id="save-table">Save</button><button id="save-as">Save as…</button>
+						<button id="undo" title="Undo (Ctrl or Command + Z)">Undo</button><button id="redo">Redo</button></nav>
+				</header>
+				<div id="ribbon-tabs" role="tablist" aria-label="Table tools">
+					<button role="tab" id="tab-home" aria-selected="true" aria-controls="panel-home">Home</button>
+					<button role="tab" id="tab-insert" aria-selected="false" tabindex="-1" aria-controls="panel-insert">Insert</button>
+					<button role="tab" id="tab-data" aria-selected="false" tabindex="-1" aria-controls="panel-data">Data</button>
+					<button role="tab" id="tab-view" aria-selected="false" tabindex="-1" aria-controls="panel-view">View</button>
+				</div>
+				<div id="sheet-tools">
+					<section role="tabpanel" id="panel-home" aria-labelledby="tab-home">
+						<div class="tool-group"><button data-command="cut">Cut</button><button data-command="copy">Copy</button><button data-command="paste">Paste</button></div>
+						<button id="auto-sum" aria-keyshortcuts="Alt+=" title="Sum adjacent numbers above or to the left (Alt+=)">Σ AutoSum</button>
+						<div class="tool-group"><select id="number-format" aria-label="Number format" title="Number format"><option value="general">General</option><option value="number">Number</option><option value="currency">Currency (€)</option><option value="percent">Percent</option><option value="date">Date</option></select>
+						<button id="less-decimals" aria-label="Fewer decimal places" title="Fewer decimal places">.0 −</button><button id="more-decimals" aria-label="More decimal places" title="More decimal places">.00 +</button></div>
+						<div class="tool-group"><select id="cell-align" aria-label="Alignment" title="Alignment"><option value="">Auto align</option><option value="left">Align left</option><option value="center">Center</option><option value="right">Align right</option></select>
+						<button id="wrap-cells" aria-pressed="false">Wrap text</button><label class="fill-color">Fill <input id="cell-color" type="color" value="#314b60" aria-label="Cell fill color" /></label><button id="no-fill">No fill</button></div>
+						<select id="cell-condition" aria-label="Conditional formatting" title="Highlight cells by value">
+							<option value="">Conditional format…</option><option value="negative">Negative · red</option><option value="positive">Positive · green</option><option value="zero">Zero · amber</option>
+						</select><button id="fill-selection">Fill selection…</button>
+					</section>
+					<section role="tabpanel" id="panel-insert" aria-labelledby="tab-insert" hidden>
+						<button id="insert-chart" aria-haspopup="dialog">Chart from selection…</button><button id="add-row">+ Row</button><button id="add-column">+ Column</button><button id="remove-row">Delete rows</button><button id="remove-column">Delete columns</button>
+					</section>
+					<section role="tabpanel" id="panel-data" aria-labelledby="tab-data" hidden>
+				<form id="search-bar" role="search">
+					<input type="search" id="find-value" aria-label="Find in table" placeholder="Find in table" autocomplete="off" />
+					<output id="find-count" aria-live="polite"></output>
+					<button type="button" id="find-prev" aria-label="Previous match" disabled>↑</button>
+					<button type="submit" id="find-next" aria-label="Next match" disabled>↓</button>
+					<button type="button" id="replace-values">Replace…</button>
+					<button type="button" id="reset-view" hidden>Clear filters and sort</button>
+				</form>
+						<button id="data-options">Column options…</button><button id="custom-sort" aria-haspopup="dialog">Sort…</button><button id="import-table">Import…</button><button id="rename-column">Rename column…</button><button id="export-view">Export visible rows…</button>
+					</section>
+					<section role="tabpanel" id="panel-view" aria-labelledby="tab-view" hidden>
+						<button id="manage-columns">Columns…</button><button id="maximize" aria-pressed="false">Maximize</button>
+					</section>
 				</div>
 				<div id="cell-bar" role="group" aria-label="Selected cell">
-					<output id="cell-address" aria-label="Cell address">A1</output>
+					<input id="cell-address" aria-label="Go to cell" title="Go to a cell or range, e.g. B2:B80" value="A1" spellcheck="false" autocomplete="off" />
 					<select id="cell-type" aria-label="Cell value type"></select>
-					<textarea id="cell-value" rows="1" aria-label="Cell value" aria-describedby="table-status" spellcheck="false"></textarea>
+					<button type="button" id="formula-help-button" aria-haspopup="dialog" aria-controls="formula-help" title="Formula help (F1)" aria-label="Formula help (F1)">ƒx ?</button>
+					<div id="formula-field"><textarea id="cell-value" rows="1" aria-label="Formula bar · cell contents" aria-describedby="table-status" spellcheck="false"></textarea><div id="formula-ink" aria-hidden="true" hidden></div></div>
+					<button id="expand-bar" aria-label="Expand formula bar" title="Expand formula bar" aria-expanded="false">⌄</button>
 					<button type="button" id="apply-cell" title="Apply cell value (Enter)">Apply</button>
 				</div>
+				<div id="table-model-loading" class="model-loading" hidden>
+					<progress aria-label="LLM formula progress"></progress>
+					<span role="status"></span>
+				</div>
 				<div id="grid-scroll">
-					<table id="data-grid" aria-label="Table data" aria-describedby="table-help"><thead></thead><tbody></tbody></table>
+					<table id="data-grid" role="grid" aria-multiselectable="true" aria-label="Table data" aria-describedby="table-help"><colgroup></colgroup><thead></thead><tbody></tbody></table>
+					<p id="cell-error" role="alert" hidden></p>
 					<button type="button" id="append-row">+ Add row</button>
 				</div>
-				<footer id="sheet-footer"><span id="dimensions"></span>
+				<section id="sheet-charts" aria-label="Worksheet charts" hidden></section>
+				<div id="sheet-strip"><nav id="worksheet-tabs" aria-label="Worksheets"></nav>
+					<button id="sheet-add" title="Add worksheet" aria-label="Add worksheet">+</button>
+					<button id="sheet-options" title="Worksheet options" aria-label="Worksheet options" aria-haspopup="dialog">⋯</button>
+				</div>
+				<footer id="sheet-footer"><span id="dimensions"></span><output id="model-state" aria-live="polite" hidden></output><button type="button" id="run-model" hidden>Calculate unanswered</button><output id="selection-stats" aria-label="Selection statistics"></output>
 					<nav aria-label="Table rows">
 						<button type="button" id="previous-page" aria-label="Previous page"
 							title="Previous page. Hold a dragged row here to turn the page.">←</button>
@@ -66,10 +113,65 @@
 				</footer>
 			</div>
 			<div id="table-drop-line" aria-hidden="true" hidden></div>
-			<p id="table-help">Double-click a cell to edit. Drag a column header or row number to move it.
-				From a selected cell, Alt + ←/→ moves its column and Alt + ↑/↓ moves its row.</p>
 			<p id="table-status" role="status"></p>
+			<details id="table-assistance">
+				<summary>Table help <span class="key-hints"><kbd>F2</kbd> Edit cell <span>·</span> <kbd>Shift</kbd> + arrow to extend selection</span></summary>
+				<p id="table-help">Double-click a cell to edit. Click a heading to select rows or columns. Drag a column header or row number to move it.
+					Drag the selection handle to extend a series. Drag a column edge to resize or double-click it to fit.
+					Start a formula with <code>=</code>, for example <code>=SUM(A1:A5)</code> or <code>=WENN(B1&gt;0;B1;0)</code>. Use <code>PI</code> or <code>E</code> as a constant, for example <code>=LN(E)</code>. Choose a suggestion with the arrow keys and <kbd>Tab</kbd> or <kbd>Enter</kbd>. Press <kbd>F4</kbd> on a reference to cycle through <code>B2</code>, <code>$B$2</code>, <code>B$2</code> and <code>$B2</code>. For a range, select one endpoint to change it separately. Trigonometric functions take angles in radians. For degrees, use <code>=SIN(RADIANS(30))</code>.
+					When a formula expects a value, click a cell or drag across cells to insert a range. The colors in the formula bar match the outlines on the sheet. Open formula help with <kbd>F1</kbd> or the <strong>ƒx ?</strong> button. Join text with <code>=A1 &amp; " " &amp; B1</code>. Use <code>=TEXTJOIN(", ",TRUE,A1:A5)</code> to separate nonempty cells with a comma and a space.
+					<code>=LLM(A1)</code> asks the configured chat model when the question changes. XLSX keeps the formula and answer.
+					From a selected cell, <kbd>Alt</kbd> + ←/→ moves its column and <kbd>Alt</kbd> + ↑/↓ moves its row.</p>
+			</details>
 		</main>
+		<div id="cell-menu" role="menu" aria-label="Selection actions" hidden>
+			<button role="menuitem" data-command="cut">Cut</button><button role="menuitem" data-command="copy">Copy</button>
+			<button role="menuitem" data-command="paste">Paste</button><button role="menuitem" data-command="values">Paste values only</button>
+			<button role="menuitem" data-command="transpose">Paste transposed</button><button role="menuitem" data-command="clear">Clear contents</button>
+			<button role="menuitem" data-command="insert-rows">Insert rows above</button><button role="menuitem" data-command="delete-rows">Delete selected rows</button>
+			<button role="menuitem" data-command="delete-columns">Delete selected columns</button>
+		</div>
+		<div id="formula-functions" role="listbox" aria-label="Formula functions and constants" hidden></div>
+		<dialog id="chart-dialog" aria-labelledby="chart-heading"><h2 id="chart-heading">Chart from selection</h2>
+			<form id="chart-form">
+				<output id="chart-source"></output>
+				<label for="chart-type">Chart type</label><select id="chart-type"><option value="bar">Column</option><option value="line">Line</option><option value="pie">Pie</option></select>
+				<label for="chart-title">Chart title</label><input id="chart-title" maxlength="180" />
+				<label for="chart-direction">Data series in</label><select id="chart-direction"><option value="columns">Columns</option><option value="rows">Rows</option></select>
+				<label><input id="chart-headings" type="checkbox" /> <span id="chart-headings-label">Series names in first row</span></label>
+				<label><input id="chart-labels" type="checkbox" /> <span id="chart-labels-label">Category labels in first column</span></label>
+				<div id="chart-preview"></div>
+				<p class="dialog-status" role="status"></p>
+				<div class="dialog-actions"><button type="button" data-close>Cancel</button><button id="chart-apply" type="submit">Insert</button></div>
+			</form>
+		</dialog>
+		<dialog id="formula-help" aria-labelledby="formula-help-title">
+			<h2 id="formula-help-title">Formula help</h2>
+			<div class="formula-help-layout">
+				<div class="formula-help-index">
+					<label for="help-search" id="help-search-label">Find a function</label>
+					<input type="search" id="help-search" autocomplete="off" spellcheck="false" autofocus />
+					<select id="help-list" size="8" aria-label="Functions and constants"></select>
+				</div>
+				<section id="help-article" aria-labelledby="help-name">
+					<h3 id="help-name"></h3><code id="help-syntax"></code>
+					<p id="help-description"></p>
+					<h4 id="help-example-label">Example</h4><code id="help-example"></code>
+				</section>
+				<p id="help-empty" role="status" hidden></p>
+			</div>
+			<div class="dialog-actions">
+				<select id="help-language" aria-label="Help language"><option value="en" lang="en">English</option><option value="de" lang="de">Deutsch</option></select>
+				<button type="button" id="help-close">Close</button>
+			</div>
+		</dialog>
+		<div id="fill-tip" role="status" hidden></div>
+		<dialog id="worksheet-dialog" aria-labelledby="worksheet-title">
+			<h2 id="worksheet-title">Worksheet</h2><form id="worksheet-form">
+			<label for="worksheet-name">Sheet name</label><input id="worksheet-name" maxlength="31" required autocomplete="off" />
+			<div class="dialog-actions"><button type="button" id="sheet-left">Move left</button><button type="button" id="sheet-right">Move right</button><button type="button" id="sheet-duplicate">Duplicate</button></div>
+			<p class="dialog-status" role="status"></p><div class="dialog-actions"><button type="button" data-close>Cancel</button><button type="submit">Rename</button></div></form>
+		</dialog>
 		<dialog id="open-dialog" aria-labelledby="open-title">
 			<h2 id="open-title">Open table</h2>
 			<form id="open-form">
@@ -82,7 +184,7 @@
 				</div>
 			</form>
 		</dialog>
-		<input id="local-file" type="file" accept=".csv,.jsonl,.parquet" hidden />
+		<input id="local-file" type="file" accept=".xlsx,.csv,.jsonl,.parquet" hidden />
 		<dialog id="save-dialog" aria-labelledby="save-title">
 			<h2 id="save-title">Save table as</h2>
 			<form id="save-form">
@@ -91,10 +193,93 @@
 				<label for="save-name">File name</label>
 				<input id="save-name" required autocomplete="off" spellcheck="false" />
 				<label for="save-format">File format</label>
-				<select id="save-format"><option value="csv">CSV</option><option value="jsonl">JSON Lines</option>
+				<select id="save-format"><option value="xlsx">Excel workbook (.xlsx)</option><option value="csv">CSV</option><option value="jsonl">JSON Lines</option>
 					<option value="parquet">Apache Parquet</option></select>
 				<p id="format-note"></p><p class="dialog-status" role="status"></p>
 				<div class="dialog-actions"><button type="button" data-close>Cancel</button><button type="submit">Save</button></div>
+			</form>
+		</dialog>
+		<dialog id="csv-dialog" aria-labelledby="csv-title">
+			<h2 id="csv-title">Import CSV</h2>
+			<form id="csv-form">
+				<label for="csv-delimiter">Separator</label>
+				<select id="csv-delimiter"><option value="">Auto-detect</option><option value=",">Comma</option><option value=";">Semicolon</option><option value="tab">Tab</option></select>
+				<label><input type="checkbox" id="csv-header" checked /> First row contains column names</label>
+				<div class="preview-scroll"><table id="csv-preview" aria-label="First five data rows"><thead></thead><tbody></tbody></table></div>
+				<p class="dialog-status" role="status"></p>
+				<div class="dialog-actions"><button type="button" data-close>Cancel</button><button type="submit" id="csv-import">Import</button></div>
+			</form>
+		</dialog>
+		<dialog id="column-options" aria-labelledby="options-title">
+			<h2 id="options-title">Column options</h2>
+			<form id="options-form">
+				<output id="column-profile"></output>
+				<button type="button" id="show-duplicates">Show duplicates</button>
+				<label for="filter-mode">Show rows</label>
+				<select id="filter-mode"><option value="">All values</option><option value="values">Selected values</option><option value="equals">Value equals</option><option value="empty">Empty values</option><option value="duplicates">Duplicate nonempty values</option></select>
+				<label for="filter-text" hidden>Value</label><input id="filter-text" hidden autocomplete="off" />
+				<fieldset id="filter-values">
+					<legend>Filter by value</legend>
+					<input type="search" id="filter-search" placeholder="Search values" aria-label="Search filter values" />
+					<button type="button" id="filter-only-matches" hidden>Select matching values only</button>
+					<label><input type="checkbox" id="filter-all" /> Select all matches</label>
+					<div id="filter-choices"></div>
+					<button type="button" id="filter-more" hidden>Show more values</button>
+				</fieldset>
+				<label for="sort-order">Sort order</label>
+				<select id="sort-order"><option value="">Unsorted column</option><option value="asc">Ascending</option><option value="desc">Descending</option></select>
+				<div class="dialog-actions"><button type="button" id="pin-column">Pin left</button><button type="button" id="hide-column">Hide column</button></div>
+				<button type="button" id="convert-column">Convert column type…</button>
+				<button type="button" id="fit-width">Fit column to content</button>
+				<div class="dialog-actions"><button type="button" id="menu-rename">Rename…</button><button type="button" id="menu-delete">Delete column</button></div>
+				<p class="dialog-status" role="status"></p>
+				<div class="dialog-actions"><button type="button" data-close>Cancel</button><button type="submit">Apply</button></div>
+			</form>
+		</dialog>
+		<dialog id="sort-dialog" aria-labelledby="sort-title">
+			<h2 id="sort-title">Sort by column</h2>
+			<form id="sort-form">
+				<ol id="sort-levels"></ol>
+				<template id="sort-level"><li>
+					<select class="sort-column" aria-label="Column"></select>
+					<select class="sort-direction" aria-label="Direction"><option value="asc">Ascending</option><option value="desc">Descending</option></select>
+					<button type="button" class="sort-up" aria-label="Move level up">↑</button>
+					<button type="button" class="sort-down" aria-label="Move level down">↓</button>
+					<button type="button" class="sort-remove" aria-label="Remove level">×</button>
+				</li></template>
+				<button type="button" id="add-sort-level">Add level</button>
+				<p class="dialog-status" role="status"></p>
+				<div class="dialog-actions"><button type="button" data-close>Cancel</button><button type="submit">Apply</button></div>
+			</form>
+		</dialog>
+		<dialog id="columns-dialog" aria-labelledby="columns-title">
+			<h2 id="columns-title">Column layout</h2>
+			<form id="layout-form">
+				<div class="preview-scroll"><table id="layout-columns"><thead><tr><th>Column</th><th>Visible</th><th>Pinned left</th></tr></thead><tbody></tbody></table></div>
+				<p class="dialog-status" role="status"></p>
+				<div class="dialog-actions"><button type="button" data-close>Cancel</button><button type="submit">Apply</button></div>
+			</form>
+		</dialog>
+		<dialog id="bulk-dialog" aria-labelledby="bulk-title">
+			<h2 id="bulk-title">Find and replace</h2>
+			<form id="bulk-form">
+				<div id="replace-fields">
+					<label for="bulk-scope">Apply to</label>
+					<select id="bulk-scope"><option value="selection">Selected range</option><option value="column">Entire active column</option><option value="table">Entire table</option></select>
+					<label for="bulk-find">Find</label><input id="bulk-find" autocomplete="off" />
+				</div>
+				<div id="value-field"><label id="bulk-value-label" for="bulk-value">Replace with</label><textarea id="bulk-value" rows="2"></textarea></div>
+				<div id="convert-fields" hidden>
+					<label for="convert-type">Target type</label>
+					<select id="convert-type"><option value="text">Text</option><option value="integer">Integer (64-bit)</option><option value="number">Number (double)</option><option value="boolean">Boolean</option></select>
+					<label for="decimal-separator">Decimal separator</label><select id="decimal-separator"><option value=".">Point (12.50)</option><option value=",">Comma (12,50)</option></select>
+				</div>
+				<p id="bulk-summary" role="status"></p>
+				<div class="preview-scroll"><table id="bulk-preview"><thead><tr><th>Cell</th><th>Before</th><th>After</th></tr></thead><tbody></tbody></table></div>
+				<div id="bulk-paging"><select id="preview-filter" aria-label="Preview rows"><option value="all">All changes</option><option value="errors">Errors</option><option value="warnings">Leading zeros</option></select>
+					<button type="button" id="preview-back" aria-label="Previous preview page">←</button><output id="preview-range"></output><button type="button" id="preview-forward" aria-label="Next preview page">→</button></div>
+				<p class="dialog-status" role="status"></p>
+				<div class="dialog-actions"><button type="button" data-close>Cancel</button><button type="submit" id="bulk-apply">Apply</button></div>
 			</form>
 		</dialog>
 		<dialog id="column-dialog" aria-labelledby="column-title">
