@@ -6,14 +6,16 @@ preview share a virtual file system (VFS) stored in the browser's IndexedDB.
 ## Get started
 
 1. Open `docs/index.html` directly in your browser.
-2. Open **Chat** and send a message. New workspaces use LFM3 1.7B on WebGPU and fall back to LFM2.5 350M on WASM.
-   It downloads each model when needed. You can send a message while the model loads. Each model works offline once
-   its files have downloaded.
+2. Open **Chat** and send a message. The default WebGPU model is LFM2.5 350M on phones and LFM3 1.7B on other devices.
+   Both fall back to LFM2.5 350M on WASM. Chat downloads models as needed. You can send a message while the model
+   loads, and each model works offline once its files have downloaded.
 3. Use **Apps → New App** or **Create App** to start another app. Describe what it should do in **Chat**, then
    open the result with **View**.
 
 In **Configuration → Models**, choose a primary WebGPU model and a separate WASM fallback, or select a model from an
 OpenAI-compatible API endpoint such as Ollama. Use **Test model** to try your selection before saving it for Chat.
+The primary model is saved for the current device category in `/config.json` under `chatLocalPrimaryDesktop` or
+`chatLocalPrimaryMobile`.
 Speech-to-text and speech output are off until you configure them there.
 
 ## Build and edit apps

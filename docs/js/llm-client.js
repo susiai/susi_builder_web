@@ -80,6 +80,8 @@ globalThis.llmClient = (() => {
             ...(config?.requestTimeoutMs !== undefined ? { requestTimeoutMs: config.requestTimeoutMs } : {}),
             ...(provider !== undefined ? { chatProvider: provider } : {}),
             ...(typeof config?.chatLocalPrimary === 'string' ? { chatLocalPrimary: config.chatLocalPrimary } : {}),
+            ...(typeof config?.chatLocalPrimaryDesktop === 'string' ? { chatLocalPrimaryDesktop: config.chatLocalPrimaryDesktop } : {}),
+            ...(typeof config?.chatLocalPrimaryMobile === 'string' ? { chatLocalPrimaryMobile: config.chatLocalPrimaryMobile } : {}),
             ...(typeof config?.chatLocalFallback === 'string' ? { chatLocalFallback: config.chatLocalFallback } : {})
         };
     }
@@ -93,6 +95,11 @@ globalThis.llmClient = (() => {
     }
 
     function normalizeWorkspaceLLMConfig(current, changes = {}) {
+        if (globalThis.llmLocal && Object.hasOwn(changes, "chatLocalPrimary")) {
+            // Models saves the primary shown on this device.
+            const { chatLocalPrimary, ...settings } = changes;
+            changes = { [llmLocal.primaryConfigKey]: chatLocalPrimary, ...settings };
+        }
         const updated = { ...current, ...changes };
         if (isRetiredEndpoint(updated.apihost)) {
             Object.assign(updated, { apihost: "", model: "", chatProvider: globalThis.llmLocal ? "browser" : "api" });
@@ -106,22 +113,39 @@ globalThis.llmClient = (() => {
             config.chatProvider = llmLocal.defaultConfig.chatProvider;
             config.thinking = llmLocal.defaultConfig.thinking;
         }
-        if (config.chatProvider === "browser" || chatLocalModel !== undefined || chatLocalDevice !== undefined) {
-            Object.assign(config, llmLocal.localConfig({ ...config, chatLocalModel }));
-        }
         const saved = { ...current, ...config };
+        const { chatLocalPrimary, chatLocalFallback } = config;
+        const hasLegacyPrimary = chatLocalPrimary !== undefined || chatLocalModel !== undefined;
+        if (config.chatProvider === "browser" || hasLegacyPrimary || chatLocalDevice !== undefined) {
+            const legacy = llmLocal.localConfig({ chatLocalModel, chatLocalPrimary, chatLocalFallback });
+            saved.chatLocalFallback = legacy.chatLocalFallback;
+            if (hasLegacyPrimary) {
+                saved.chatLocalPrimaryDesktop = config.chatLocalPrimaryDesktop ?? legacy.chatLocalPrimary;
+                saved.chatLocalPrimaryMobile = config.chatLocalPrimaryMobile ?? legacy.chatLocalPrimary;
+            }
+        }
+        delete saved.chatLocalPrimary;
         delete saved.chatLocalModel;
         delete saved.chatLocalDevice;
         return saved;
     }
 
     function createConfigStore(vfs, path) {
+        function resolveConfig(saved) {
+            const config = normalizeLLMConfig(saved);
+            if (globalThis.llmLocal && config.chatProvider === "browser") {
+                Object.assign(config, llmLocal.localConfig(config));
+            }
+            return config;
+        }
+
         function update(changes, validate) {
             return vfs.update(path, source => {
                 const current = parseConfigFile(source, path);
                 const next = normalizeWorkspaceLLMConfig(current, changes);
                 if (validate && globalThis.llmLocal && next.chatProvider === "browser") {
-                    llmLocal.modelPair(next.chatLocalPrimary, next.chatLocalFallback);
+                    const { chatLocalPrimary, chatLocalFallback } = resolveConfig(next);
+                    llmLocal.modelPair(chatLocalPrimary, chatLocalFallback);
                 }
                 return JSON.stringify(next, null, 2);
             });
@@ -137,12 +161,12 @@ globalThis.llmClient = (() => {
                 if (Object.keys(config).some(key => current[key] !== config[key]) ||
                     Object.keys(current).some(key => !Object.hasOwn(config, key))) {
                     // Normalize the latest settings atomically, retaining unrelated configuration sections.
-                    return normalizeLLMConfig(JSON.parse(await update()));
+                    return resolveConfig(JSON.parse(await update()));
                 }
-                return normalizeLLMConfig(config);
+                return resolveConfig(config);
             },
             async write(changes) {
-                return normalizeLLMConfig(JSON.parse(await update(changes, true)));
+                return resolveConfig(JSON.parse(await update(changes, true)));
             }
         };
     }

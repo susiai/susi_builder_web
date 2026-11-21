@@ -3,8 +3,21 @@
 globalThis.llmLocal = (() => {
 	const root = "/Models/Chat/";
 	const contextLimit = 8192;
+
+	function isMobilePhone() {
+		const browser = globalThis.navigator;
+		const userAgent = browser?.userAgent ?? "";
+		if (/\b(?:iPad|Tablet)\b/i.test(userAgent)) return false;
+		return browser?.userAgentData?.mobile === true || /\biPhone\b|\bAndroid\b.*\bMobile\b/i.test(userAgent);
+	}
+
+	const mobilePhone = isMobilePhone();
+	const primaryConfigKey = mobilePhone ? "chatLocalPrimaryMobile" : "chatLocalPrimaryDesktop";
 	const defaultConfig = {
-		chatProvider: "browser", chatLocalPrimary: "lfm3-1.7b-webgpu", chatLocalFallback: "lfm2.5-350m-wasm", thinking: false
+		chatProvider: "browser",
+		chatLocalPrimary: mobilePhone ? "lfm2.5-350m-webgpu" : "lfm3-1.7b-webgpu",
+		chatLocalFallback: "lfm2.5-350m-wasm",
+		thinking: false
 	};
 	const metadata = [
 		["generation_config.json", 219, "9e9e031ae8bca36eefcdcdd0b35d83c61baa01e31d68d5f5a961c9ca1a4b95bf"],
@@ -218,9 +231,11 @@ globalThis.llmLocal = (() => {
 		return models.find(model => model.device === device && (model.id === id || model.modelId === id));
 	}
 
-	function localConfig({ chatLocalModel, chatLocalPrimary, chatLocalFallback }) {
+	function localConfig(config) {
+		const { chatLocalModel, chatLocalPrimary, chatLocalFallback } = config;
 		return {
-			chatLocalPrimary: chatLocalPrimary ?? modelForDevice(chatLocalModel, "webgpu")?.id ?? defaultConfig.chatLocalPrimary,
+			chatLocalPrimary: config[primaryConfigKey] ?? chatLocalPrimary ??
+				modelForDevice(chatLocalModel, "webgpu")?.id ?? defaultConfig.chatLocalPrimary,
 			chatLocalFallback: chatLocalFallback ?? modelForDevice(chatLocalModel, "wasm")?.id ?? defaultConfig.chatLocalFallback
 		};
 	}
@@ -1070,7 +1085,7 @@ globalThis.llmLocal = (() => {
 	const preview = window.susi?.localModel;
 	if (preview) {
 		// The preview is sandboxed. Its host runs the same worker against the host's model cache.
-		return { models, modelPaths, defaultConfig, localConfig, modelPair, modelLabel, supportsImages,
+		return { models, modelPaths, defaultConfig, primaryConfigKey, localConfig, modelPair, modelLabel, supportsImages,
 			status: (options, { signal, onProgress } = {}) =>
 				preview("status", [options], signal, (name, value) => { if (name === "progress") onProgress?.(value); }),
 			generate: ({ signal, onToken, onStatus, onProgress, onRestart, ...options }) => {
@@ -1103,6 +1118,6 @@ globalThis.llmLocal = (() => {
 		}
 	}
 
-	return { models, modelPaths, defaultConfig, localConfig, modelPair, modelLabel, supportsImages,
+	return { models, modelPaths, defaultConfig, primaryConfigKey, localConfig, modelPair, modelLabel, supportsImages,
 		status, download, generate, close, requestPrimaryRetry, previewRequest };
 })();
