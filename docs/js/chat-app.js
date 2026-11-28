@@ -32,38 +32,7 @@ const susiChatApp = (() => {
 		const { ready, apiKey } = open(appId);
 		const vfs = await ready;
 		await vfs.mkdir(projectsRoot);
-		const directory = "/.webstation/conversations/";
-		const files = (await vfs.ls(directory)).filter(name => !name.includes("/") && name.endsWith(".json"));
-		const values = new Map(await Promise.all(files.map(async name =>
-			[decodeURIComponent(name.slice(0, -5)), await vfs.getasync(directory + name)])));
-		let writes = Promise.resolve();
-		let pending = 0;
-		let failure;
-		const history = {
-			get pending() { return pending > 0; },
-			getItem: key => values.get(key) ?? null,
-			setItem(key, value) {
-				if (failure) throw failure;
-				const expected = history.getItem(key);
-				values.set(key, value);
-				pending++;
-				writes = writes.then(async () => {
-					if (failure) return;
-					await vfs.update(directory + encodeURIComponent(key) + ".json", source => {
-						if ((source ?? null) !== expected) {
-							throw Object.assign(new Error("This conversation changed in another tab. Export it before reloading."),
-								{ code: "EEXIST" });
-						}
-						return value;
-					});
-				}).catch(error => {
-					failure = error;
-					history.onError?.(error);
-				}).finally(() => { pending--; });
-				return writes;
-			}
-		};
-		mountSusiChat({ historyStore: history, modelHref, container, projectsRoot, readApiKey: apiKey,
+		mountSusiChat({ conversationStore: ConversationStore.forProject(vfs), modelHref, container, projectsRoot, readApiKey: apiKey,
 			allowBrowser: !window.susi?.workspace, showProjectPreview: false });
 	}
 

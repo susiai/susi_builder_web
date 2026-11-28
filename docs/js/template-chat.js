@@ -28,10 +28,19 @@
 					return file.text();
 				},
 				async update(path, updater) {
-					const file = await readFile(path);
-					const value = updater(await file?.text());
-					await projectFiles.writeFile(path, value, { ifUnchanged: file });
-					return value;
+					// The preview bridge uses conditional writes. Reapply the edit to newer settings on conflict.
+					for (let attempt = 1; ; attempt++) {
+						const file = await readFile(path);
+						const source = await file?.text();
+						const value = updater(source);
+						if (value === source) return value;
+						try {
+							await projectFiles.writeFile(path, value, { ifUnchanged: file });
+							return value;
+						} catch (error) {
+							if (attempt === 8 || !["EEXIST", "ESTALE"].includes(error.code)) throw error;
+						}
+					}
 				}
 			};
 			const { read, write } = llmClient.createConfigStore(fileStore, settingsPath);
@@ -67,8 +76,9 @@
 		const send = get('chat-send'), stop = get('chat-stop'), reset = get('chat-new'), status = get('chat-status');
 		const modelStatus = get('chat-model-status');
 		const workspace = demo ? undefined : await openBasicChat();
-		const settings = workspace ? await workspace.readConfig() : llmClient.normalizeConfig(llmLocal.defaultConfig);
-		const inference = llmClient.requestOptions(settings);
+		const settings = workspace ? await workspace.readConfig() : {};
+		const selectedModel = client.selectModel(settings);
+		const inference = selectedModel.options;
 		const usesKey = !demo && inference.provider !== 'browser';
 		const key = get('chat-api-key');
 		get('chat-auth').hidden = !usesKey;
@@ -76,7 +86,7 @@
 		else {
 			const preparation = new AbortController();
 			window.addEventListener('pagehide', () => preparation.abort(), { once: true });
-			const model = await client.modelStatus(inference, {
+			const model = await selectedModel.status({
 				signal: preparation.signal,
 				onProgress: state => report(modelStatus, state.message || state.label || '')
 			});
@@ -165,10 +175,7 @@
 			report(status, '');
 			input.focus();
 		});
-		window.addEventListener('pagehide', () => {
-			active?.abort();
-			if (inference.provider === 'browser') llmLocal.close();
-		});
+		window.addEventListener('pagehide', () => active?.abort());
 	}
 
 	(configPanel ? configure() : chat()).catch(error => {

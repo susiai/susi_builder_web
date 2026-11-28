@@ -29,11 +29,7 @@ const tableWorkbook = (() => {
 		if (Math.floor(Number(n)) === 60) return "1900-02-29";
 		return new Date(epoch + (Number(n) + (Number(n) < 60 ? 1 : 0)) * day).toISOString().slice(0,10);
 	}
-	const defaultRowCount = 16;
-	function empty(name = "Sheet1", nr = defaultRowCount, nc = 10) {
-		return { format:"xlsx", name, columns:Array.from({length:nc},(_,c) => ({name:tableCalc.letters(c)})),
-			rows:Array.from({length:nr},() => []), styles:new Map() };
-	}
+	const {createSheet: empty, defaultRowCount} = Workbook;
 	const conditions = {
 		negative: { operator:"lessThan", color:"FF9B2626" },
 		positive: { operator:"greaterThan", color:"FF18643D" },
@@ -121,8 +117,11 @@ const tableWorkbook = (() => {
 		const helpers = Array.isArray(layouts?.[0]?.chartDataSheets) ? layouts[0].chartDataSheets : [];
 		const tabs = book.worksheets.filter(ws => ws !== modelSheet && !(ws.state === "veryHidden" && helpers.includes(ws.name))).map(ws => {
 			const layout = Array.isArray(layouts) && layouts.find(x => x?.name === ws.name);
-			const nr = Math.max(1,ws.rowCount, Number.isSafeInteger(layout?.rows) ? layout.rows : 0);
-			let nc = Math.max(1,Array.isArray(layout?.columns) ? layout.columns.length : 0);
+			// An empty CSV or a header-only CSV can legitimately have no data rows.
+			const csvLayout = typeof layout?.csv?.header === "boolean";
+			const minimum = csvLayout ? 0 : 1;
+			const nr = Math.max(minimum,ws.rowCount, Number.isSafeInteger(layout?.rows) ? layout.rows : 0);
+			let nc = Math.max(minimum,Array.isArray(layout?.columns) ? layout.columns.length : 0);
 			if (nr > 1048576) throw new Error("Worksheet row numbers exceed the Excel limit.");
 			const lines = [];
 			const lastRow = ws.rowCount;
@@ -134,6 +133,17 @@ const tableWorkbook = (() => {
 			const tab = empty(ws.name,nr,nc);
 			if (Array.isArray(layout?.charts)) tab.charts = layout.charts.filter(chart => tableCharts.valid(chart,tab));
 			tab.columns.forEach((col,c) => { if (typeof layout?.columns?.[c] === "string") col.name = layout.columns[c]; });
+			if (csvLayout) {
+				const csv = layout.csv;
+				tab.csv = {header: csv.header};
+				if ([",",";","\t"].includes(csv.delimiter)) tab.csv.delimiter = csv.delimiter;
+				if (["\n","\r","\r\n"].includes(csv.eol)) tab.csv.eol = csv.eol;
+				if (["utf-8","utf-16le","utf-16be"].includes(csv.encoding)) tab.csv.encoding = csv.encoding;
+				for (const key of ["trailing","bom"]) if (typeof csv[key] === "boolean") tab.csv[key] = csv[key];
+				if (Array.isArray(layout.implicitColumns)) for (const c of layout.implicitColumns) {
+					if (Number.isInteger(c) && tab.columns[c]) tab.columns[c].implicit = true;
+				}
+			}
 			lines.forEach(line => line.eachCell({includeEmpty:true},(cell,c) => {
 				const cells = tab.rows[line.number-1], value = cell.value;
 				if (cell.formula) cells[c-1] = new tableCalc.Formula(tableCalc.fromExcel(cell.formula));
@@ -154,7 +164,8 @@ const tableWorkbook = (() => {
 				if (!Number.isInteger(r) || !Number.isInteger(c) || !tab?.rows[r] || !tab.columns[c] || typeof expression !== "string") continue;
 				// Respect a cell overwritten in Excel between editor sessions.
 				const value = tab.rows[r][c] ?? "";
-				if (value === visible) tab.rows[r][c] = new tableCalc.Formula(expression);
+				if (value === visible) tab.rows[r][c] = new tableCalc.Formula(modelData.formulaLanguage === undefined
+					? tableCalc.fromLegacyModelFormula(expression) : expression);
 			}
 			tabs.modelAnswers = modelData.answers;
 		}
@@ -181,7 +192,9 @@ const tableWorkbook = (() => {
 	async function write(tabs, calculate, answers = []) {
 		const {Workbook} = await library();
 		const book = new Workbook(); book.calcProperties.fullCalcOnLoad = true;
-		const layouts = tabs.map(t => ({name:t.name,rows:t.rows.length,columns:t.columns.map(c => c.name),charts:t.charts?.length ? t.charts : undefined}));
+		const layouts = tabs.map(t => ({name:t.name,rows:t.rows.length,columns:t.columns.map(c => c.name),charts:t.charts?.length ? t.charts : undefined,
+			csv:t.csv ?? (t.format === "csv" ? {header:true} : undefined),
+			implicitColumns:t.csv && t.columns.flatMap((column,c) => column.implicit ? [c] : [])}));
 		const modelCells = [];
 		for (const tab of tabs) {
 			const ws = book.addWorksheet(tab.name);
@@ -214,7 +227,7 @@ const tableWorkbook = (() => {
 			let name = "_SUSI_LLM", i = 1;
 			while (names.has(name.toLowerCase())) name = "_SUSI_LLM_" + i++;
 			layouts[0].modelSheet = name;
-			writeModelSheet(book,name,{cells:modelCells,answers});
+			writeModelSheet(book,name,{cells:modelCells,answers,formulaLanguage:"en"});
 		}
 		const drawings = tableChartXlsx.prepare(book,tabs,calculate,layouts);
 		book.description = metadata + JSON.stringify(layouts);

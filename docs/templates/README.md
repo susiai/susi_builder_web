@@ -58,12 +58,34 @@ The generated app has its own model settings. Browser tools and speech settings 
 
 ### Browser inference in a standalone app
 
-Generated Chat apps include the shared `llm-client.js`, `transformer-model-assets.js`, `llm-local.js`, and the
-Transformers.js bundle in `js/vendor/`. To use the same client in your own app, load those scripts in that order.
+For an OpenAI-compatible endpoint, load `llm-client.js` and use `new LlmClient()`.
+For the bundled browser backend, also load `transformer-model-assets.js` and `llm-local.js` in that order,
+include the Transformers.js bundle in `js/vendor/`, and use `new LlmClient({ browserBackend: llmLocal })`.
+Generated Chat apps include these files. Their existing `llmClient.create()` factory selects the page's backend.
+If you also use `llmClient.createConfigStore(storage, path)` in your own app, load
+`workspace-config-store.js` before creating the settings store.
 Pass `provider: "browser"`, `model: "qwen3-0.6b-webgpu"`, and `fallbackModel: "lfm2.5-350m-wasm"` to
 `streamChat()` or `completeChat()`. The worker prepares the selected builds as needed. See `llmLocal.models`
 for available combination IDs. To use a single device, install it with `llmLocal.download(vfs, model, device)`
 and pass `model` and `device` to the client.
+
+For apps that follow workspace settings, call `const selection = client.selectModel(config)` when
+settings change. Use `await selection.status({ signal, onProgress })` to display readiness, and pass
+`selection.options` to generation. Query image support with `client.supportsImages(selection.options)`.
+When `selection.canPrepareOnDemand` is true, a user can send a
+message while preparation is still running.
+
+To use another browser backend, supply an object with `status(options, preparation)` and `generate(request)`.
+The first returns a readiness object with `ready`, `label`, and `message`. The second returns an assistant
+`message` and can report `model`, `finishReason`, `promptTokens`, and `completionTokens`. An optional
+`supportsImages(options)` method advertises vision. A backend can also implement `close()` to release a
+changed selection and `onModelStatusChange(listener)` to return an unsubscribe function.
+
+Both methods return `message`, `finishReason`, and `model` for browser models and OpenAI-compatible
+endpoints. Read reply text from `result.message.content` and tool calls from `result.message.tool_calls`.
+The model ID comes from the provider when available and otherwise defaults to the requested ID.
+`result.usage` can contain `prompt_tokens`, `completion_tokens`, and `total_tokens`.
+`result.tokenCount` is the completion token count. Missing counts are `undefined`, and a reported zero stays zero.
 
 For images, select `lfm3-vl-2b-webgpu` or `qwen3.5-4b-webgpu` and use OpenAI Chat Completions
 `image_url` parts in user messages.

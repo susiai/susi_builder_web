@@ -4,7 +4,7 @@
 	function binaryTableEditorUrl(path) {
 		return /\.(parquet|xlsx)$/i.test(path) ? tableEditorUrl(path) : null;
 	}
-	const requested = new URLSearchParams(location.search).get("file");
+	const requested = history.state?.studioEdit?.path ?? new URLSearchParams(location.search).get("file");
 	const requestedTable = requested?.startsWith("/") && binaryTableEditorUrl(requested);
 	if (requestedTable) {
 		window.location.replace(requestedTable);
@@ -27,6 +27,17 @@
 	const saveGroup = document.getElementById("studio-save-group");
 	const saveButton = document.getElementById("studio-save");
 	const saveStatus = document.getElementById("studio-save-status");
+	const chatToggle = document.getElementById("studio-chat-toggle");
+	const chatUndo = document.getElementById("studio-chat-undo");
+	const chatForm = document.getElementById("studio-chat");
+	const chatPrompt = document.getElementById("studio-chat-prompt");
+	const chatSelection = document.getElementById("studio-chat-selection");
+	const chatSubmit = document.getElementById("studio-chat-submit");
+	const chatClose = document.getElementById("studio-chat-close");
+	const chatStatus = document.getElementById("studio-chat-status");
+	const chatResult = document.getElementById("studio-chat-result");
+	let chatRun;
+	let lastEdit = history.state?.studioUndo;
 	const dictationControls = document.getElementById("studio-dictation-controls");
 	const recordButton = document.getElementById("studio-record");
 	const stopRecording = document.getElementById("studio-stop-recording");
@@ -93,6 +104,7 @@
 	function updateDictationControls() {
 		dictationControls.hidden = !active?.session;
 		dictation.render(Boolean(speechSettings), !active?.session || editor.getReadOnly());
+		updateChatControls();
 	}
 
 	async function refreshSpeechSettings() {
@@ -238,7 +250,7 @@
 	}
 
 	async function navigateTo(href) {
-		if (navigating) return;
+		if (navigating || chatRun) return;
 		navigating = true;
 		// Existing file writes must finish before the last snapshot records their saved state.
 		await Promise.allSettled([...pendingWrites]);
@@ -346,12 +358,239 @@
 	}
 
 	function updateSaveStatus() {
+		updateChatControls();
 		saveGroup.hidden = !active?.session;
 		if (!active?.session) return;
 		const state = active.saving ? "saving" : active.error ? "error" : active.dirty ? "dirty" : "saved";
 		saveStatus.dataset.state = state;
 		saveStatus.textContent = { saving: "Saving…", error: "Save failed", dirty: "Unsaved", saved: "Saved" }[state];
-		saveButton.disabled = active.saving || isBusy(active.path);
+		saveButton.disabled = active.saving || Boolean(chatRun) || isBusy(active.path);
+	}
+
+	function chatUnavailable() {
+		if (!active?.session) return "Open a text file to use file chat.";
+		if (active.dirty || active.error) return "Save this file before using file chat.";
+		if (restoring || navigating || active.saving || busyPaths.size || dictation.busy || editor.getReadOnly()) {
+			return "Wait for the current operation to finish.";
+		}
+		return "";
+	}
+
+	function updateChatControls() {
+		const unavailable = chatUnavailable();
+		chatUndo.hidden = !lastEdit || lastEdit.path !== active?.path || !active?.session;
+		chatUndo.disabled = Boolean(unavailable || chatRun);
+		chatToggle.disabled = Boolean(unavailable || chatRun);
+		chatToggle.title = unavailable || "File chat (Ctrl+I / Command+I)";
+		chatPrompt.disabled = chatToggle.disabled;
+		chatSubmit.disabled = chatToggle.disabled || !chatPrompt.value.trim();
+		if (!chatRun) chatStatus.textContent = unavailable || "Enter to send · Shift+Enter for a new line";
+	}
+
+	function closeChat() {
+		chatForm.hidden = true;
+		chatToggle.setAttribute("aria-expanded", "false");
+	}
+
+	function updateChatSelection() {
+		if (!chatForm.hidden && !chatRun) chatSelection.hidden = editor.selection.isEmpty();
+	}
+
+	function selectedPassage(file) {
+		const range = file.session.selection.getRange();
+		if (range.isEmpty()) return;
+		const { start, end } = range;
+		let text = file.session.getTextRange(range);
+		// Ace uses one newline style per session. Quote the saved line endings so edit_file can match mixed-EOL text.
+		if (start.row !== end.row && file.source.includes("\r")) {
+			const parts = file.source.split(/(\r\n|\r|\n)/).slice(2 * start.row, 2 * end.row + 1);
+			if (parts.length === 2 * (end.row - start.row) + 1) {
+				parts[0] = parts[0].slice(start.column);
+				parts[parts.length - 1] = parts.at(-1).slice(0, end.column);
+				const saved = parts.join("");
+				if (saved.replace(/\r\n?/g, "\n") === text.replace(/\r\n?/g, "\n")) text = saved;
+			}
+		}
+		return { start, end, text };
+	}
+
+	function toggleChat() {
+		if (chatRun) return;
+		const reason = chatUnavailable();
+		if (reason) {
+			if (active?.session) showMessage(reason);
+			return;
+		}
+		if (!chatForm.hidden) {
+			closeChat();
+			editor.focus();
+			return;
+		}
+		openChat();
+	}
+
+	function openChat() {
+		showMessage();
+		hideMenu();
+		if (narrow.matches) showExplorer(false);
+		chatForm.hidden = false;
+		chatToggle.setAttribute("aria-expanded", "true");
+		chatPrompt.value = "";
+		chatPrompt.placeholder = "Describe a change to " + active.name + "…";
+		updateChatSelection();
+		updateChatControls();
+		chatPrompt.focus();
+	}
+
+	function lockForChat(locked) {
+		editor.setReadOnly(locked);
+		tablist.inert = explorer.inert = locked;
+		chatClose.disabled = false;
+		chatClose.textContent = locked ? "Cancel" : "×";
+		chatClose.setAttribute("aria-label", locked ? "Cancel edit" : "Close file chat");
+		chatForm.setAttribute("aria-busy", String(locked));
+		updateSaveStatus();
+		updateDictationControls();
+	}
+
+	function rememberEdit(undo) {
+		const state = { ...history.state };
+		if (undo) state.studioUndo = undo;
+		else delete state.studioUndo;
+		history.replaceState(state, "");
+		lastEdit = undo;
+	}
+
+	async function undoChatEdit() {
+		const file = active, undo = lastEdit;
+		if (!undo || undo.path !== file?.path || chatRun || chatUnavailable()) return;
+		const controller = chatRun = new AbortController();
+		openRequest++;
+		lockForChat(true);
+		chatClose.disabled = true;
+		chatStatus.textContent = "Restoring file…";
+		showMessage();
+		try {
+			const { value, base } = await reverseStudioEdit(undo, file);
+			controller.signal.throwIfAborted();
+			const write = writeSource(file, value, base);
+			pendingWrites.add(write);
+			try { file.source = await write; }
+			finally { pendingWrites.delete(write); }
+			const cursor = file.session.selection.getCursor();
+			file.session.setValue(file.source);
+			file.savedValue = file.session.getValue();
+			file.session.selection.moveCursorToPosition(cursor);
+			file.error = "";
+			updateDirty(file);
+			rememberEdit(undefined);
+			showMessage("Last AI edit undone.");
+		} catch (error) {
+			showMessage(error?.message || "Unable to undo the last AI edit.", true);
+		} finally {
+			chatRun = undefined;
+			lockForChat(false);
+			updateChatSelection();
+			if (chatForm.hidden) editor.focus();
+			else chatPrompt.focus();
+		}
+	}
+
+	async function submitChat(event) {
+		event.preventDefault();
+		if (chatRun || chatForm.hidden || chatUnavailable() || !chatPrompt.value.trim()) return;
+		const file = active;
+		const instruction = chatPrompt.value.trim();
+		const selection = selectedPassage(file);
+		const controller = chatRun = new AbortController();
+		const { signal } = controller;
+		let committed;
+		let reloading = false;
+		openRequest++;
+		lockForChat(true);
+		chatClose.focus();
+		showMessage();
+		chatStatus.textContent = "Preparing file…";
+		try {
+			await Promise.allSettled([...pendingWrites]);
+			if (!await persistSession()) throw new Error("Unable to preserve open editor drafts.");
+			const config = await readLLMConfig();
+			const workspace = await new WorkspaceConfigStore(vfs).read();
+			const before = (await readSource(file.path)).text;
+			if (typeof before !== "string" ||
+				studioDraftText(file.path, before, true) !== studioDraftText(file.path, file.source, true)) {
+				throw new Error("This file changed outside Code Studio. Reload it before applying an edit.");
+			}
+			signal.throwIfAborted();
+			chatStatus.textContent = "Editing " + file.name + "…";
+			const { text, reply } = await StudioFileChat.run({
+				client: llmClient.create({ readApiKey: readLLMApiKey }), config, path: file.path, source: before, instruction,
+				template: StudioFileChat.prompt(workspace), selection, markedTemplate: workspace.studioMarkedPrompt,
+				maxToolCalls: agentSettings(workspace).maxToolCalls, signal,
+				onStatus: status => { chatStatus.textContent = status; }
+			});
+			signal.throwIfAborted();
+			chatClose.disabled = true;
+			chatStatus.textContent = "Finishing edit…";
+			if (before !== text) {
+				const previous = lastEdit;
+				const undo = await createStudioEditUndo(file.path, before, text, file.encoded?.encoding);
+				signal.throwIfAborted();
+				// Reserve the undo before committing, including when storage for the reload is limited.
+				if (undo) rememberEdit(undo);
+				const write = writeSource(file, text, before);
+				pendingWrites.add(write);
+				try { committed = await write; }
+				catch (error) {
+					if (undo && !vfs.wasReset) rememberEdit(previous);
+					throw error;
+				}
+				finally { pendingWrites.delete(write); }
+			}
+			const after = committed ?? before;
+			const ranges = StudioFileChat.addedRanges(before, after);
+			if (reply) {
+				document.getElementById("studio-chat-result-path").textContent = file.path;
+				document.getElementById("studio-chat-output").textContent = reply;
+				chatResult.showModal();
+				await new Promise(resolve => chatResult.addEventListener("close", resolve, { once: true }));
+			}
+			if (!await persistSession()) throw new Error("Unable to preserve open editor drafts.");
+			const studioEdit = { path: file.path, stamp: StudioFileChat.textStamp(after), ranges };
+			history.replaceState({ ...history.state, studioEdit }, "");
+			location.reload();
+			reloading = true;
+		} catch (error) {
+			if (committed !== undefined) {
+				file.source = file.savedValue = committed;
+				file.session.setValue(committed);
+				updateDirty(file);
+			}
+			showMessage(signal.aborted ? "File edit canceled." : error.message || "Unable to apply the edit.", !signal.aborted);
+		} finally {
+			if (!reloading) {
+				chatRun = undefined;
+				lockForChat(false);
+				updateChatSelection();
+				chatPrompt.focus();
+			}
+		}
+	}
+
+	function restoreAfterChat() {
+		const { studioEdit, ...state } = history.state || {};
+		if (!studioEdit) return;
+		history.replaceState(state, "");
+		if (studioEdit.path !== active?.path || chatUnavailable()) return;
+		if (studioEdit.ranges?.length && StudioFileChat.textStamp(active.source) === studioEdit.stamp) {
+			const session = active.session;
+			const Range = ace.require("ace/range").Range;
+			const markers = studioEdit.ranges.map(coords => session.addMarker(new Range(...coords), "studio-added-text", "text"));
+			session.once("change", () => { for (const id of markers) session.removeMarker(id); });
+			const [row, column] = studioEdit.ranges[0];
+			editor.gotoLine(row + 1, column);
+		}
+		openChat();
 	}
 
 	function updateFilebar(file) {
@@ -379,6 +618,7 @@
 
 	function activate(file, focus = false) {
 		if (active !== file) {
+			closeChat();
 			const wasDictating = dictation.busy;
 			dictation.cancel();
 			showDictationStatus(file?.session && wasDictating ? "Dictation canceled because the active file changed." : "");
@@ -486,7 +726,7 @@
 
 		try {
 			const source = await readSource(path);
-			if (isBusy(path) || !fileRows.has(path)) return;
+			if (chatRun || isBusy(path) || !fileRows.has(path)) return;
 			if (source.text === undefined && !source.image) {
 				if (request === openRequest) showMessage("Use Download in the file menu to open this binary file.");
 				return;
@@ -515,8 +755,18 @@
 		removeTab(file);
 	}
 
+	async function writeSource(file, value, base = file.source) {
+		if (file.path === WorkspaceConfigStore.defaultPath) return writeStudioConfig(vfs, value, base);
+		if (file.encoded) {
+			const bytes = encodeTableText(value, file.encoded.encoding);
+			const mtime = await vfs.fileSystem.write(file.path, bytes, { expectedFile: file.encoded, returnMtime: true });
+			file.encoded = { ...file.encoded, bytes, mtime };
+		} else await vfs.put(file.path, value, { expectedValue: base });
+		return value;
+	}
+
 	async function saveFile(file) {
-		if (!file?.dirty || file.saving || isBusy(file.path)) return;
+		if (chatRun || !file?.dirty || file.saving || isBusy(file.path)) return;
 		const value = file.session.getValue();
 		file.saving = true;
 		file.close.disabled = true;
@@ -526,18 +776,12 @@
 		}
 		let write;
 		try {
-			let bytes;
-			if (file.path === "/config.json") write = writeStudioConfig(vfs, value, file.source);
-			else if (file.encoded) {
-				bytes = encodeTableText(value, file.encoded.encoding);
-				write = vfs.fileSystem.write(file.path, bytes, { expectedFile: file.encoded, returnMtime: true });
-			} else write = vfs.put(file.path, value, { expectedValue: file.source });
+			write = writeSource(file, value);
 			pendingWrites.add(write);
-			const stored = await write;
-			if (bytes) { file.encoded.bytes = bytes; file.encoded.mtime = stored; }
-			file.source = file.path === "/config.json" ? stored : value;
+			file.source = await write;
 			file.savedValue = value;
 			file.error = "";
+			if (lastEdit?.path === file.path) rememberEdit(undefined);
 		} catch (error) {
 			file.error = error?.message || "Unable to save the file.";
 		} finally {
@@ -668,6 +912,7 @@
 			pendingWrites.add(write);
 			await write;
 			const movedPath = key => target + key.slice(path.length);
+			if (lastEdit && pathWithin(lastEdit.path, path)) rememberEdit({ ...lastEdit, path: movedPath(lastEdit.path) });
 			for (const file of files) {
 				file.path = movedPath(file.path);
 				file.label.title = file.path;
@@ -721,6 +966,7 @@
 			write = vfs.deleteTree(path);
 			pendingWrites.add(write);
 			await write;
+			if (lastEdit?.path === path) rememberEdit(undefined);
 			if (file) removeTab(file);
 			if (selectedPath === path) selectFile(undefined);
 			await refreshTree();
@@ -741,6 +987,7 @@
 	try {
 		vfs = await window.vfsReady;
 		editor = createVfsAceEditor(host);
+		editor.on("changeSelection", updateChatSelection);
 		emptySession = editor.session;
 		editor.textInput.getElement().setAttribute("aria-label", "Code editor");
 		refreshSpeechSettings();
@@ -824,9 +1071,34 @@
 	});
 	window.addEventListener("resize", () => hideMenu());
 	treeScroll.addEventListener("scroll", () => hideMenu());
+	chatToggle.addEventListener("click", toggleChat);
+	chatUndo.addEventListener("click", undoChatEdit);
+	chatClose.addEventListener("click", () => {
+		if (chatRun) chatRun.abort();
+		else { closeChat(); editor.focus(); }
+	});
+	chatForm.addEventListener("submit", submitChat);
+	chatPrompt.addEventListener("input", updateChatControls);
+	chatForm.addEventListener("keydown", event => {
+		if (event.isComposing) return;
+		if (event.key === "Escape" && !chatClose.disabled) {
+			event.preventDefault();
+			chatClose.click();
+		} else if (event.target === chatPrompt && event.key === "Enter" && !event.shiftKey) {
+			event.preventDefault();
+			chatForm.requestSubmit();
+		}
+	});
 	saveButton.addEventListener("click", () => saveFile(active));
 	document.addEventListener("keydown", (event) => {
-		if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "s") {
+		if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || chatResult.open) return;
+		if (event.key.toLowerCase() === "i" && active?.session) {
+			event.preventDefault();
+			event.stopPropagation();
+			if (event.repeat) return;
+			if (!chatForm.hidden && !chatPrompt.disabled && editor.isFocused()) chatPrompt.focus();
+			else toggleChat();
+		} else if (event.key.toLowerCase() === "s") {
 			event.preventDefault();
 			event.stopPropagation();
 			saveFile(active);
@@ -857,11 +1129,14 @@
 	});
 	window.addEventListener("focus", refreshSpeechSettings);
 	window.addEventListener("pagehide", () => {
+		chatRun?.abort();
 		dictation.close();
 		stt.close();
 		persistSession();
 	});
 	window.addEventListener("vfs-reset", () => {
+		chatRun?.abort();
+		if (lastEdit) rememberEdit(undefined);
 		speechRequest += 1;
 		speechSettings = undefined;
 		dictation.close();
@@ -892,4 +1167,6 @@
 		studio.inert = false;
 	}
 	if (requested?.startsWith("/") && !requested.endsWith("/")) await openFile(requested);
+	updateChatControls();
+	restoreAfterChat();
 })();

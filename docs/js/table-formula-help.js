@@ -1,7 +1,6 @@
 "use strict";
 
 function tableFormulaHelp(dialog) {
-	// Examples are arguments, so the displayed name and separators always match the help language.
 	const articles = {
 		SUM: ["Adds the numbers in the supplied cells or ranges.", "Addiert die Zahlen in den angegebenen Zellen oder Bereichen.", ["A1:A5","10"]],
 		AVERAGE: ["Returns the arithmetic mean of the numbers in a range.", "Gibt den arithmetischen Mittelwert der Zahlen in einem Bereich zurück.", ["A1:A5"]],
@@ -9,13 +8,13 @@ function tableFormulaHelp(dialog) {
 		MAX: ["Returns the largest number.", "Gibt die größte Zahl zurück.", ["A1:A5"]],
 		CONCAT: ["Joins text and ranges without a separator. Ranges are read row by row.", "Verbindet Texte und Zellbereiche ohne Trennzeichen. Bereiche werden zeilenweise gelesen.", ["A1:B2"]],
 		CONCATENATE: ["Joins individual values in order. Include a space in quotes to separate words.", "Verbindet einzelne Werte in der angegebenen Reihenfolge. Ein Leerzeichen in Anführungszeichen trennt die Wörter.", ["A1",'" "',"B1"]],
-		TEXTJOIN: ["Joins values or ranges with a delimiter. TRUE skips empty values. FALSE keeps their places.", "Verbindet Werte oder Zellbereiche mit einem Trennzeichen. WAHR überspringt leere Werte. FALSCH behält ihre Positionen bei.", ['", "',"TRUE","A1:A5"]],
-		IF: ["Tests a condition and evaluates the matching branch. If the condition is false and the last argument is omitted, the result is FALSE.", "Prüft eine Bedingung und berechnet den passenden Zweig. Ist die Bedingung falsch und fehlt das letzte Argument, lautet das Ergebnis FALSCH.", ["A1>0","A1","0"]],
+		TEXTJOIN: ["Joins values or ranges with a delimiter. TRUE skips empty values. FALSE keeps their places.", "Verbindet Werte oder Zellbereiche mit einem Trennzeichen. TRUE überspringt leere Werte. FALSE behält ihre Positionen bei.", ['", "',"TRUE","A1:A5"]],
+		IF: ["Tests a condition and evaluates the matching branch. If the condition is false and the last argument is omitted, the result is FALSE.", "Prüft eine Bedingung und berechnet den passenden Zweig. Ist die Bedingung falsch und fehlt das letzte Argument, lautet das Ergebnis FALSE.", ["A1>0","A1","0"]],
 		LLM: ["Sends the question to the configured chat model and returns its reply as text. Identical questions reuse the workbook’s saved answer. An empty question makes no request.", "Stellt dem konfigurierten Chatmodell die Frage und gibt die Antwort als Text zurück. Gleiche Fragen verwenden die in der Arbeitsmappe gespeicherte Antwort. Eine leere Frage löst keine Anfrage aus.", ["A1"]],
 		PI: ["Returns π, approximately 3.14159. Use PI or PI().", "Gibt die Kreiszahl π zurück, ungefähr 3,14159. Du kannst PI oder PI() schreiben.", []],
 		E: ["Euler’s number, approximately 2.71828, is the base of the natural logarithm.", "Die Eulersche Zahl, ungefähr 2,71828, ist die Basis des natürlichen Logarithmus."],
-		TRUE: ["Returns the logical value true, for example to skip empty cells in TEXTJOIN.", "Gibt den Wahrheitswert wahr zurück, etwa zum Überspringen leerer Zellen in TEXTVERKETTEN.", []],
-		FALSE: ["Returns the logical value false, for example to keep empty cells in TEXTJOIN.", "Gibt den Wahrheitswert falsch zurück, etwa zum Beibehalten leerer Zellen in TEXTVERKETTEN.", []],
+		TRUE: ["Returns the logical value true, for example to skip empty cells in TEXTJOIN.", "Gibt den Wahrheitswert wahr zurück, etwa zum Überspringen leerer Zellen in TEXTJOIN.", []],
+		FALSE: ["Returns the logical value false, for example to keep empty cells in TEXTJOIN.", "Gibt den Wahrheitswert falsch zurück, etwa zum Beibehalten leerer Zellen in TEXTJOIN.", []],
 		RADIANS: ["Converts an angle from degrees to radians.", "Rechnet einen Winkel von Grad in Bogenmaß um.", ["180"]],
 		DEGREES: ["Converts an angle from radians to degrees.", "Rechnet einen Winkel von Bogenmaß in Grad um.", ["PI"]],
 		ATAN2: ["Returns the angle in radians from the positive x-axis to the point (x, y). Enter x first. The origin has no angle.", "Gibt den Winkel im Bogenmaß von der positiven x-Achse zum Punkt (x, y) zurück. Das erste Argument ist x. Für den Ursprung ist kein Winkel definiert.", ["1","1"]],
@@ -30,6 +29,7 @@ function tableFormulaHelp(dialog) {
 		LOG10: ["Returns the base-10 logarithm of a positive number.", "Gibt den Zehnerlogarithmus einer positiven Zahl zurück.", ["100"]],
 		LOG2: ["Returns the base-2 logarithm of a positive number.", "Gibt den Logarithmus einer positiven Zahl zur Basis 2 zurück.", ["8"]]
 	};
+	articles.CHAT = articles.LLM;
 	for (const [name,en,de] of [
 		["SIN","sine","Sinus"], ["COS","cosine","Kosinus"], ["TAN","tangent","Tangens"],
 		["COT","cotangent","Kotangens"], ["SEC","secant","Sekans"], ["CSC","cosecant","Kosekans"]
@@ -44,13 +44,8 @@ function tableFormulaHelp(dialog) {
 		en:["Formula help","Find a function","Functions and constants","Example","Close","No matching function.","Help language"],
 		de:["Formelhilfe","Funktion suchen","Funktionen und Konstanten","Beispiel","Schließen","Keine passende Funktion gefunden.","Sprache der Hilfe"]
 	};
-	const germanArgs = {"number":"Zahl","number, …":"Zahl; …","radians":"Bogenmaß","question":"Frage","number, [base]":"Zahl; [Basis]"};
 	const bareNames = new Set(["PI","E","TRUE","FALSE"]);
-	const topics = new Map();
-	for (const topic of tableCalc.helpTopics) {
-		topics.set(topic.name,topic);
-		if (topic.alias) topics.set(topic.alias,topic);
-	}
+	const topics = new Map(tableCalc.helpTopics.map(topic => [topic.name,topic]));
 	const names = [...topics.keys()].sort();
 	const get = id => dialog.querySelector("#"+id);
 	const search = get("help-search"), list = get("help-list"), language = get("help-language");
@@ -58,10 +53,9 @@ function tableFormulaHelp(dialog) {
 
 	function display() {
 		const name = list.value, topic = topics.get(name);
-		const de = topic?.alias ? name === topic.alias : preferred === "de";
-		const lang = de ? "de" : "en";
-		const [title,find,entries,example,close,empty,languageLabel] = labels[lang];
-		dialog.lang = language.value = lang;
+		const de = preferred === "de";
+		const [title,find,entries,example,close,empty,languageLabel] = labels[preferred];
+		dialog.lang = language.value = preferred;
 		get("formula-help-title").textContent = title;
 		get("help-search-label").textContent = find;
 		list.setAttribute("aria-label",entries);
@@ -72,14 +66,13 @@ function tableFormulaHelp(dialog) {
 		get("help-article").hidden = !topic;
 		if (!topic) return;
 		const [english,german,exampleArgs] = articles[topic.name];
-		const args = de ? topic.localArgs ?? germanArgs[topic.args] ?? topic.args : topic.args;
+		const {args} = topic;
 		const bare = bareNames.has(topic.name) && args !== undefined;
 		get("help-name").textContent = name;
 		get("help-description").textContent = de ? german : english;
 		get("help-syntax").textContent = (bare ? name+" · " : "") + name + (args === undefined ? "" : "("+args+")");
 		get("help-example-label").textContent = example;
-		const localized = exampleArgs?.map(arg => de && arg === "TRUE" ? "WAHR" : arg);
-		get("help-example").textContent = "=" + name + (localized ? "("+localized.join(de ? "; " : ", ")+")" : "");
+		get("help-example").textContent = "=" + name + (exampleArgs ? "("+exampleArgs.join(", ")+")" : "");
 	}
 	function filter(select) {
 		const query = search.value.trim().toUpperCase();
@@ -95,11 +88,7 @@ function tableFormulaHelp(dialog) {
 	list.onchange = display;
 	language.onchange = () => {
 		preferred = language.value;
-		const topic = topics.get(list.value);
-		if (!topic) { display(); return; }
-		const name = preferred === "de" && topic.alias ? topic.alias : topic.name;
-		if (![...list.options].some(option => option.value === name)) search.value = "";
-		filter(name);
+		display();
 	};
 
 	// Track nested calls up to the caret. Quoted text and worksheet names are single tokens.
@@ -135,7 +124,7 @@ function tableFormulaHelp(dialog) {
 	return (text,caret,highlighted,onClose) => {
 		restore = onClose;
 		search.value = "";
-		filter(highlighted || atCaret(text,caret) || (preferred === "de" ? "SUMME" : "SUM"));
+		filter(highlighted || atCaret(text,caret) || "SUM");
 		dialog.showModal();
 	};
 }

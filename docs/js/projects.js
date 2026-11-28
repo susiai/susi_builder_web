@@ -8,13 +8,7 @@
 	const open = document.getElementById("project-new");
 	const newTile = open?.closest("li");
 	const deleteDialog = document.getElementById("app-delete-dialog");
-	const decoder = new TextDecoder("utf-8", { fatal: true });
-	const artworkTypes = [
-		["app.svg", "image/svg+xml"],
-		["app.png", "image/png"],
-		["favicon.svg", "image/svg+xml"]
-	];
-	let vfs;
+	let vfs, catalog;
 	let tiles = new Map();
 	let request = 0;
 	let creating = false;
@@ -25,7 +19,7 @@
 		status.toggleAttribute("data-error", error);
 	}
 
-	function createTile(project) {
+	function createTile({ path: project, name, indexPath }) {
 		const item = document.createElement("li");
 		const header = document.createElement("header");
 		const heading = document.createElement(pinnedSection ? "h3" : "h2");
@@ -69,7 +63,7 @@
 		image.hidden = true;
 		image.addEventListener("load", () => { image.hidden = !image.naturalWidth; });
 		const initials = document.createElement("span");
-		initials.textContent = Array.from(vfs.baseName(project)).slice(0, 2).join("");
+		initials.textContent = Array.from(name).slice(0, 2).join("");
 		artwork.append(image, initials);
 
 		const actions = document.createElement("footer");
@@ -81,7 +75,7 @@
 		const code = document.createElement("a");
 		code.textContent = "Code";
 		code.title = "Edit this app in Code Studio";
-		code.href = `code-studio.html?${new URLSearchParams({ file: project + "index.html" })}`;
+		code.href = `code-studio.html?${new URLSearchParams({ file: indexPath })}`;
 		code.setAttribute("aria-label", `Code Studio for ${project}`);
 		view.textContent = "View";
 		actions.append(chat, code, view);
@@ -101,7 +95,7 @@
 				download.setAttribute("aria-disabled", "true");
 				download.title = "Preparing ZIP…";
 				try {
-					const { name, blob } = await vfsZip.exportFolder(vfs, project);
+					const { name, blob } = await vfs.archive.exportFolder(project);
 					downloadVfsBlob(blob, name);
 				} catch (error) {
 					notice(`Could not download ${project} as ZIP. ${error?.message || error}`, true);
@@ -116,17 +110,6 @@
 		return Object.assign(tile, { chat, image });
 	}
 
-	async function readManifest(path) {
-		const file = await vfs.fileSystem.readFile(path);
-		try {
-			const metadata = JSON.parse(decoder.decode(file.bytes));
-			if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) throw new TypeError();
-			return { file, metadata };
-		} catch {
-			throw new Error(`Fix the JSON object in ${path} before changing its pin.`);
-		}
-	}
-
 	function setPin(pin, pinned) {
 		pin.setAttribute("aria-pressed", String(pinned));
 		pin.title = pinned ? "Unpin from Home" : "Pin to Home";
@@ -136,16 +119,9 @@
 		if (pin.getAttribute("aria-disabled") === "true") return;
 		const pinned = pin.getAttribute("aria-pressed") !== "true";
 		pin.setAttribute("aria-disabled", "true");
-		const path = project + "app.json";
 		const name = vfs.baseName(project);
 		try {
-			const current = await readManifest(path).catch(error => {
-				if (error?.code === "ENOENT") return null;
-				throw error;
-			});
-			const metadata = current?.metadata ?? { version: 1, name };
-			const value = JSON.stringify({ ...metadata, pinned }, null, 2) + "\n";
-			await vfs.fileSystem.write(path, value, current ? { expectedFile: current.file } : { exclusive: true });
+			await catalog.setPinned(project, pinned);
 			await refresh();
 			notice(pinned ? `Pinned ${name} to Home.` : `Unpinned ${name} from Home.`);
 		} catch (error) {
@@ -167,17 +143,11 @@
 
 	async function refresh() {
 		const id = ++request;
-		const entries = await vfs.ls("/");
-		const files = new Set(entries);
-		const apps = await Promise.all(findVfsProjects(entries).map(async project => {
-			const path = project + "app.json";
-			const current = files.has(path.slice(1)) ? await readManifest(path).catch(() => null) : null;
-			return { project, pinned: current?.metadata.pinned === true };
-		}));
+		const apps = await catalog.list();
 		if (id !== request) return;
 		const visible = pinnedSection ? apps.filter(app => app.pinned) : apps;
-		if (visible.length !== tiles.size || visible.some(({ project }) => !tiles.has(project))) {
-			const next = new Map(visible.map(({ project }) => [project, tiles.get(project) ?? createTile(project)]));
+		if (visible.length !== tiles.size || visible.some(app => !tiles.has(app.path))) {
+			const next = new Map(visible.map(app => [app.path, tiles.get(app.path) ?? createTile(app)]));
 			for (const [path, tile] of tiles) {
 				if (!next.has(path)) setArtwork(tile, null);
 			}
@@ -190,17 +160,15 @@
 		if (loading) loading.hidden = true;
 		list.setAttribute("aria-busy", "false");
 
-		for (const { project, pinned } of visible) {
-			const tile = tiles.get(project);
+		for (const { path, pinned, artwork } of visible) {
+			const tile = tiles.get(path);
 			if (tile.pin) setPin(tile.pin, pinned);
-			const artwork = artworkTypes.find(([name]) => files.has(project.slice(1) + name));
 			if (!artwork) {
 				setArtwork(tile, null);
 				continue;
 			}
-			const [name, type] = artwork;
-			vfs.getasync(project + name).then(
-				value => { if (id === request) setArtwork(tile, value ?? null, type); },
+			vfs.getasync(artwork.path).then(
+				value => { if (id === request) setArtwork(tile, value ?? null, artwork.type); },
 				() => { if (id === request) setArtwork(tile, null); }
 			);
 		}
@@ -233,7 +201,7 @@
 			creating = create.disabled = cancel.disabled = true;
 			errorMessage.hidden = true;
 			try {
-				const path = await createVfsApp(vfs, name);
+				const path = await catalog.create(name);
 				dialog.close();
 				notice(`Created ${vfs.baseName(path)}.`);
 				await refresh();
@@ -297,6 +265,7 @@
 
 	try {
 		vfs = await window.vfsReady;
+		catalog = new ProjectCatalog(vfs);
 		window.addEventListener("vfs-reset", event => {
 			if (!event.detail?.cleared) return;
 			request += 1;

@@ -28,6 +28,8 @@ globalThis.templateCatalog = {
   "chatModelAssets": {
     "files": [
       { "source": "docs/js/llm-client.js", "path": "js/llm-client.js" },
+      { "source": "docs/js/workspace-config-store.js", "path": "js/workspace-config-store.js", "rawScript": true },
+      { "source": "docs/js/model-progress.js", "path": "js/model-progress.js", "rawScript": true },
       { "source": "docs/js/transformer-model-assets.js", "path": "js/transformer-model-assets.js", "rawScript": true },
       { "source": "docs/js/llm-local.js", "path": "js/llm-local.js", "rawScript": true },
       { "source": "docs/js/chat-model-settings.js", "path": "js/chat-model-settings.js", "rawScript": true },
@@ -39,8 +41,8 @@ globalThis.templateCatalog = {
       { "source": "docs/js/vendor/onnxruntime-LICENSE.txt", "path": "js/vendor/onnxruntime-LICENSE.txt" },
       { "source": "docs/js/vendor/onnxruntime-ThirdPartyNotices.txt", "path": "js/vendor/onnxruntime-ThirdPartyNotices.txt" }
     ],
-    "scripts": ["js/llm-client.js", "js/transformer-model-assets.js", "js/llm-local.js"],
-    "bytes": 1191542
+    "scripts": ["js/workspace-config-store.js", "js/llm-client.js", "js/model-progress.js", "js/transformer-model-assets.js", "js/llm-local.js"],
+    "bytes": 1199871
   },
   "designs": [
     {
@@ -53,11 +55,15 @@ globalThis.templateCatalog = {
         "#91abff"
       ],
       "css": "css/susi.css",
+      "styles": ["css/select.css"],
+      "scripts": ["js/select-picker.js"],
       "files": [
         {
           "source": "docs/css/webstation.css",
           "path": "css/susi.css"
         },
+        { "source": "docs/js/select-picker.js", "path": "js/select-picker.js", "rawScript": true },
+        { "source": "docs/css/select.css", "path": "css/select.css" },
         {
           "source": "docs/fonts/OFL-Barlow-Condensed.txt",
           "path": "fonts/OFL-Barlow-Condensed.txt"
@@ -82,7 +88,7 @@ globalThis.templateCatalog = {
           "binary": true
         }
       ],
-      "bytes": 105911
+      "bytes": 119884
     },
     {
       "id": "field-notes",
@@ -633,7 +639,7 @@ globalThis.templateCatalog = {
       ],
       "scripts": ["js/vfs.js", "js/chat.js"],
       "styles": ["css/chat.css"],
-      "bytes": 86878
+      "bytes": 118940
     },
     {
       "id": "chat-workbench",
@@ -648,6 +654,9 @@ globalThis.templateCatalog = {
         {"source": "docs/js/python-runner.js", "path": "js/chat-workbench/python-runner.js", "rawScript": true},
         {"source": "docs/js/javascript-runner.js", "path": "js/chat-workbench/javascript-runner.js", "rawScript": true},
         {"source": "docs/js/browser-client.js", "path": "js/chat-workbench/browser-client.js", "rawScript": true},
+        {"source": "docs/js/tool-registry.js", "path": "js/chat-workbench/tool-registry.js", "rawScript": true},
+        {"source": "docs/js/workstation-tools.js", "path": "js/chat-workbench/workstation-tools.js", "rawScript": true},
+        {"source": "docs/js/agent-settings.js", "path": "js/chat-workbench/agent-settings.js", "rawScript": true},
         {"source": "docs/js/agent-runtime.js", "path": "js/chat-workbench/agent-runtime.js", "rawScript": true},
         {"source": "docs/js/workstation-state.js", "path": "js/chat-workbench/workstation-state.js", "rawScript": true},
         {"source": "docs/js/skills.js", "path": "js/chat-workbench/skills.js", "rawScript": true},
@@ -659,6 +668,7 @@ globalThis.templateCatalog = {
         {"source": "docs/js/mcp.js", "path": "js/chat-workbench/mcp.js", "rawScript": true},
         {"source": "docs/js/vfs-projects.js", "path": "js/chat-workbench/vfs-projects.js", "rawScript": true},
         {"source": "docs/js/vendor/markdown-it-15.0.3.min.js", "path": "js/chat-workbench/markdown-it-15.0.3.min.js"},
+        {"source": "docs/js/conversation-store.js", "path": "js/chat-workbench/conversation-store.js", "rawScript": true},
         {"source": "docs/js/document-attachments.js", "path": "js/chat-workbench/document-attachments.js", "rawScript": true},
         {"source": "docs/js/stt.js", "path": "js/chat-workbench/stt.js", "rawScript": true},
         {"source": "docs/js/tts.js", "path": "js/chat-workbench/tts.js", "rawScript": true},
@@ -700,6 +710,9 @@ globalThis.templateCatalog = {
         "js/chat-workbench/python-runner.js",
         "js/chat-workbench/javascript-runner.js",
         "js/chat-workbench/browser-client.js",
+        "js/chat-workbench/tool-registry.js",
+        "js/chat-workbench/workstation-tools.js",
+        "js/chat-workbench/agent-settings.js",
         "js/chat-workbench/agent-runtime.js",
         "js/chat-workbench/workstation-state.js",
         "js/chat-workbench/skills.js",
@@ -711,6 +724,7 @@ globalThis.templateCatalog = {
         "js/chat-workbench/mcp.js",
         "js/chat-workbench/vfs-projects.js",
         "js/chat-workbench/markdown-it-15.0.3.min.js",
+        "js/chat-workbench/conversation-store.js",
         "js/chat-workbench/document-attachments.js",
         "js/chat-workbench/stt.js",
         "js/chat-workbench/tts.js",
@@ -720,7 +734,7 @@ globalThis.templateCatalog = {
       ],
       "scripts": [],
       "styles": [],
-      "bytes": 11134148
+      "bytes": 11172607
     }
   ],
   "purposes": [

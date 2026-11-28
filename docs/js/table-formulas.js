@@ -4,8 +4,8 @@ const tableCalc = (() => {
 	class Formula {
 		constructor(expression) { this.expression = expression; }
 		get usesLLM() {
-			return /\bLLM\s*\(/i.test(this.expression) && scan(this.expression).some((t,i,parts) =>
-				t.toUpperCase() === "LLM" && parts[nextToken(parts,i+1)] === "(");
+			return /\b(?:CHAT|LLM)\s*\(/i.test(this.expression) && scan(this.expression).some((t,i,parts) =>
+				parts[nextToken(parts,i+1)] === "(" && canonical(t) === "LLM");
 		}
 	}
 	class Fault extends Error {}
@@ -56,68 +56,63 @@ const tableCalc = (() => {
 		if (digits[keep] >= "5") rounded += 1n;
 		return rounded === 0n ? 0 : Number(sign + rounded + "e" + (-places));
 	}
+	const modelFunction = { args:"question", maxArgs:1 };
 	const functions = {
-		SUM: { args:"number, …", alias:"SUMME", localArgs:"Zahl; …" },
-		AVERAGE: { args:"number, …", alias:"MITTELWERT", localArgs:"Zahl; …" },
+		SUM: { args:"number, …" },
+		AVERAGE: { args:"number, …" },
 		MIN: { args:"number, …" },
 		MAX: { args:"number, …" },
-		CONCAT: { args:"text1, [text2], …", alias:"TEXTKETTE", localArgs:"Text1; [Text2]; …", maxArgs:253, future:true },
-		CONCATENATE: { args:"text1, [text2], …", alias:"VERKETTEN", localArgs:"Text1; [Text2]; …", maxArgs:255 },
-		TEXTJOIN: { args:"delimiter, ignore_empty, text1, …", alias:"TEXTVERKETTEN", localArgs:"Trennzeichen; Leer_ignorieren; Text1; …", maxArgs:254, future:true },
-		LLM: { args:"question", maxArgs:1 },
-		IF: { args:"test, then, [else]", alias:"WENN", localArgs:"Prüfung; dann; [sonst]", maxArgs:3 },
+		CONCAT: { args:"text1, [text2], …", maxArgs:253, future:true },
+		CONCATENATE: { args:"text1, [text2], …", maxArgs:255 },
+		TEXTJOIN: { args:"delimiter, ignore_empty, text1, …", maxArgs:254, future:true },
+		LLM: modelFunction,
+		CHAT: modelFunction,
+		IF: { args:"test, then, [else]", maxArgs:3 },
 		PI: { args:"", calc:() => Math.PI },
-		RADIANS: { args:"degrees", alias:"BOGENMASS", localArgs:"Grad", calc:x => x * (Math.PI / 180) },
-		DEGREES: { args:"radians", alias:"GRAD", localArgs:"Bogenmaß", calc:x => x * (180 / Math.PI) },
+		RADIANS: { args:"degrees", calc:x => x * (Math.PI / 180) },
+		DEGREES: { args:"radians", calc:x => x * (180 / Math.PI) },
 		SIN: { args:"radians", calc:Math.sin },
 		COS: { args:"radians", calc:Math.cos },
 		TAN: { args:"radians", calc:Math.tan },
 		COT: { args:"radians", calc:reciprocalTrig(Math.tan), future:true },
 		SEC: { args:"radians", calc:reciprocalTrig(Math.cos), future:true },
-		CSC: { args:"radians", alias:"COSEC", localArgs:"Bogenmaß", calc:reciprocalTrig(Math.sin), future:true },
-		ASIN: { args:"number", alias:"ARCSIN", calc:Math.asin },
-		ACOS: { args:"number", alias:"ARCCOS", calc:Math.acos },
-		ATAN: { args:"number", alias:"ARCTAN", calc:Math.atan },
-		ATAN2: { args:"x, y", alias:"ARCTAN2", localArgs:"x; y", calc:(x,y) => x === 0 && y === 0 ? fail("#DIV/0!") : Math.atan2(y,x) },
-		ACOT: { args:"number", alias:"ARCCOT", calc:x => Math.atan2(1,x), future:true },
+		CSC: { args:"radians", calc:reciprocalTrig(Math.sin), future:true },
+		ASIN: { args:"number", calc:Math.asin },
+		ACOS: { args:"number", calc:Math.acos },
+		ATAN: { args:"number", calc:Math.atan },
+		ATAN2: { args:"x, y", calc:(x,y) => x === 0 && y === 0 ? fail("#DIV/0!") : Math.atan2(y,x) },
+		ACOT: { args:"number", calc:x => Math.atan2(1,x), future:true },
 		ASEC: { args:"number", calc:x => Math.acos(reciprocal(x)), excelCall:["ACOS(1/(", "))"] },
 		ACSC: { args:"number", calc:x => Math.asin(reciprocal(x)), excelCall:["ASIN(1/(", "))"] },
-		SINH: { args:"number", alias:"SINHYP", calc:Math.sinh },
-		COSH: { args:"number", alias:"COSHYP", calc:Math.cosh },
-		TANH: { args:"number", alias:"TANHYP", calc:Math.tanh },
-		COTH: { args:"number", alias:"COTHYP", calc:reciprocalTrig(Math.tanh), future:true },
-		SECH: { args:"number", alias:"SECHYP", calc:reciprocalTrig(Math.cosh), future:true },
-		CSCH: { args:"number", alias:"COSECHYP", calc:reciprocalTrig(Math.sinh), future:true },
-		ASINH: { args:"number", alias:"ARCSINHYP", calc:Math.asinh },
-		ACOSH: { args:"number", alias:"ARCCOSHYP", calc:Math.acosh },
-		ATANH: { args:"number", alias:"ARCTANHYP", calc:Math.atanh },
-		ACOTH: { args:"number", alias:"ARCCOTHYP", calc:x => Math.atanh(1 / x), future:true },
+		SINH: { args:"number", calc:Math.sinh },
+		COSH: { args:"number", calc:Math.cosh },
+		TANH: { args:"number", calc:Math.tanh },
+		COTH: { args:"number", calc:reciprocalTrig(Math.tanh), future:true },
+		SECH: { args:"number", calc:reciprocalTrig(Math.cosh), future:true },
+		CSCH: { args:"number", calc:reciprocalTrig(Math.sinh), future:true },
+		ASINH: { args:"number", calc:Math.asinh },
+		ACOSH: { args:"number", calc:Math.acosh },
+		ATANH: { args:"number", calc:Math.atanh },
+		ACOTH: { args:"number", calc:x => Math.atanh(1 / x), future:true },
 		ASECH: { args:"number", calc:x => Math.acosh(reciprocal(x)), excelCall:["ACOSH(1/(", "))"] },
 		ACSCH: { args:"number", calc:x => Math.asinh(reciprocal(x)), excelCall:["ASINH(1/(", "))"] },
 		EXP: { args:"number", calc:Math.exp },
 		EXP2: { args:"number", calc:x => 2 ** x, excelCall:["POWER(2,", ")"] },
-		POWER: { args:"base, exponent", alias:"POTENZ", localArgs:"Basis; Exponent", calc:power },
-		FACT: { args:"number", alias:"FAKULTÄT", calc:factorial },
-		ROUND: { args:"number, num_digits", alias:"RUNDEN", localArgs:"Zahl; Anzahl_Stellen", calc:round },
-		SQRT: { args:"number", alias:"WURZEL", calc:Math.sqrt },
+		POWER: { args:"base, exponent", calc:power },
+		FACT: { args:"number", calc:factorial },
+		ROUND: { args:"number, num_digits", calc:round },
+		SQRT: { args:"number", calc:Math.sqrt },
 		LN: { args:"number", calc:Math.log },
 		LOG: { args:"number, [base]", calc:log, maxArgs:2 },
 		LOG10: { args:"number", calc:Math.log10 },
 		LOG2: { args:"number", calc:Math.log2, excelCall:["LOG(", ",2)"] }
 	};
-	const aliases = { WAHR:"TRUE", FALSCH:"FALSE" };
 	const constants = {
 		PI: { value:Math.PI, excel:"PI()" },
 		E: { value:Math.E, excel:"EXP(1)" }
 	};
-	const functionNames = [];
-	for (const [name, {args, alias, localArgs}] of Object.entries(functions)) {
-		functionNames.push({name, args});
-		if (alias) {
-			aliases[alias] = name;
-			functionNames.push({name:alias, args:localArgs ?? "Zahl"});
-		}
-	}
+	const functionNames = Object.entries(functions).map(([name,{args}]) => ({name,args}));
+	functionNames.push({name:"TRUE",args:""}, {name:"FALSE",args:""});
 	const suggestions = [...functionNames, ...Object.entries(constants).map(([name,{value}]) => ({name,value}))];
 	const refPattern = /^(?:(?:'((?:[^']|'')+)'|([\p{L}_][\p{L}\d_.]*))!)?(\$?)([A-Z]{1,3})(\$?)([1-9]\d*)$/iu;
 	const tokens = /"(?:[^"]|"")*"|(?:'(?:[^']|'')+'!|[\p{L}_][\p{L}\d_.]*!)?\$?[A-Z]{1,3}\$?[1-9]\d*(?![\p{L}\d_.(])|(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|[\p{L}_][\p{L}\d_.]*|#(?:REF!|DIV\/0!|VALUE!|NAME\?|N\/A|NUM!|NULL!)|<>|<=|>=|\s+|./giu;
@@ -195,8 +190,9 @@ const tableCalc = (() => {
 	}
 	function canonical(name) {
 		const upper = name.toUpperCase();
+		if (upper === "CHAT") return "LLM";
 		if (upper.startsWith("_XLFN.") && functions[upper.slice(6)]?.future) return upper.slice(6);
-		return aliases[upper] || upper;
+		return upper;
 	}
 	function rewrite(expression, transform) {
 		return scan(expression).map((token,i,parts) => {
@@ -215,15 +211,19 @@ const tableCalc = (() => {
 			let end = separator + 1;
 			while (parts[end]?.trim() === "") end++;
 			const b = parts[separator] === ":" && reference(parts[end]);
-			if (b && belongs(a,home) && belongs(b,a.name || home)) {
-				const step = a[key] <= b[key] ? 1 : -1;
-				while (remap(a[key]) < 0 && a[key] !== b[key]) a[key] += step;
-				while (remap(b[key]) < 0 && b[key] !== a[key]) b[key] -= step;
-				a[key] = remap(a[key]); b[key] = remap(b[key]);
-				parts[i] = refText(a); parts[end] = refText(b); i = end;
-			} else if (belongs(a,home)) {
-				a[key] = remap(a[key]); parts[i] = refText(a);
+			const firstHere = belongs(a,home);
+			if (b) {
+				// An unqualified end of a range inherits the first endpoint's sheet.
+				const lastHere = belongs(b,a.name || home);
+				if (firstHere && lastHere) {
+					const step = a[key] <= b[key] ? 1 : -1;
+					while (remap(a[key]) < 0 && a[key] !== b[key]) a[key] += step;
+					while (remap(b[key]) < 0 && b[key] !== a[key]) b[key] -= step;
+				}
+				if (lastHere) { b[key] = remap(b[key]); parts[end] = refText(b); }
 			}
+			if (firstHere) { a[key] = remap(a[key]); parts[i] = refText(a); }
+			if (b) i = end;
 		}
 		return parts.join("");
 	}
@@ -245,6 +245,24 @@ const tableCalc = (() => {
 		}
 		return parts;
 	}
+	// Only older LLM metadata stored localized expressions verbatim.
+	const legacyFunctions = {
+		SUMME:"SUM", MITTELWERT:"AVERAGE", TEXTKETTE:"CONCAT", VERKETTEN:"CONCATENATE",
+		TEXTVERKETTEN:"TEXTJOIN", WENN:"IF", BOGENMASS:"RADIANS", GRAD:"DEGREES",
+		COSEC:"CSC", ARCSIN:"ASIN", ARCCOS:"ACOS", ARCTAN:"ATAN",
+		ARCTAN2:"ATAN2", ARCCOT:"ACOT", SINHYP:"SINH", COSHYP:"COSH",
+		TANHYP:"TANH", COTHYP:"COTH", SECHYP:"SECH", COSECHYP:"CSCH",
+		ARCSINHYP:"ASINH", ARCCOSHYP:"ACOSH", ARCTANHYP:"ATANH", ARCCOTHYP:"ACOTH",
+		POTENZ:"POWER", FAKULTÄT:"FACT", RUNDEN:"ROUND", WURZEL:"SQRT"
+	};
+	function fromLegacyModelFormula(expression) {
+		return scan(expression).map((token,i,parts) => {
+			const name = token.toUpperCase();
+			if (name === "WAHR") return "TRUE";
+			if (name === "FALSCH") return "FALSE";
+			return parts[nextToken(parts,i+1)] === "(" && Object.hasOwn(legacyFunctions,name) ? legacyFunctions[name] : token;
+		}).join("");
+	}
 	function fromExcel(expression) {
 		return "=" + scan(expression).map((t,i,parts) =>
 			/^_xlfn\./i.test(t) && parts[nextToken(parts,i+1)] === "(" && functions[canonical(t)]?.future
@@ -262,7 +280,6 @@ const tableCalc = (() => {
 			} else if (t === "(") { out.push(t); closing.push(")"); }
 			else if (t === ")") out.push(closing.pop() ?? ")");
 			else if (Object.hasOwn(constants,t.toUpperCase())) out.push(constants[t.toUpperCase()].excel);
-			else if (/^(WAHR|FALSCH)$/i.test(t)) out.push(canonical(t));
 			else out.push(t === ";" ? "," : t);
 		}
 		return out.join("");
@@ -319,7 +336,7 @@ const tableCalc = (() => {
 				const ref = reference(t);
 				if (ref) node = { ref };
 				else if (Object.hasOwn(constants,t.toUpperCase())) node = { literal:constants[t.toUpperCase()].value };
-				else if (/^(TRUE|FALSE|WAHR|FALSCH)$/i.test(t)) node = { literal:/^(TRUE|WAHR)$/i.test(t) };
+				else if (/^(TRUE|FALSE)$/i.test(t)) node = { literal:t.toUpperCase() === "TRUE" };
 				else node = { error:"#NAME?" };
 			}
 			while (Object.hasOwn(precedence,ts[i]) && precedence[ts[i]] >= min) {
@@ -480,7 +497,6 @@ const tableCalc = (() => {
 		}
 		return (tab,r,c) => { try { return cell(tab,r,c); } catch (e) { return e.message; } };
 	}
-	const helpTopics = Object.entries(functions).map(([name,{alias,args,localArgs}]) => ({name,alias,args,localArgs}));
-	helpTopics.push({name:"E"}, {name:"TRUE",alias:"WAHR",args:""}, {name:"FALSE",alias:"FALSCH",args:""});
-	return { Formula, calculator, expectsReference, referenceSpans, cycleReferences, letters, offset, rename, relayout, excel, fromExcel, functionNames, suggestions, helpTopics };
+	const helpTopics = [...functionNames, {name:"E"}];
+	return { Formula, calculator, expectsReference, referenceSpans, cycleReferences, letters, offset, rename, relayout, excel, fromExcel, fromLegacyModelFormula, functionNames, suggestions, helpTopics };
 })();

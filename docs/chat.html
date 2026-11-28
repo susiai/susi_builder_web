@@ -5,11 +5,12 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
 		<meta name="color-scheme" content="dark" />
 		<title>SUSI Builder Chat</title>
-		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
-		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
-		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
-		<link rel="stylesheet" href="css/chat.css?v=28977a37" />
-		<link rel="stylesheet" href="css/speech-dictation.css?v=92b87b4e" />
+		<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css" />
+		<link rel="stylesheet" href="css/select.css" />
+		<link rel="stylesheet" href="css/chat.css" />
+		<link rel="stylesheet" href="css/speech-dictation.css" />
 		<style>
 			.chat-assistant { grid-template-columns: 3.9rem minmax(0, 1fr); }
 			.chat-avatar {
@@ -18,33 +19,41 @@
 			}
 			.chat-avatar::before { content: none; }
 		</style>
-		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+		<script defer src="js/select-picker.js"></script>
+		<script defer src="js/navigation-frame.js"></script>
 	</head>
 	<body id="chat-page">
 		<iframe id="site-menu" title="Pages" src="navigation.html#chat"></iframe>
-		<script src="js/browser-client.js?v=b4dbd832"></script>
-		<script src="js/agent-runtime.js?v=ee7149df"></script>
-		<script src="js/workstation-state.js?v=3fc703bb"></script>
-		<script src="js/llm-client.js?v=cead3d4b"></script>
-		<script src="js/skills.js?v=c42ccf4f"></script>
-		<script src="js/file-search.js?v=80072ff5"></script>
-		<script src="js/webfetch.js?v=c50d56e3"></script>
-		<script src="js/llm.js?v=1d26062a"></script>
-		<script src="js/vfs.js?v=a4b76514"></script>
-		<script src="js/workspace-runner.js?v=6e0750b3"></script>
-		<script src="js/python-runner.js?v=fc189fa4"></script>
-		<script src="js/javascript-runner.js?v=2c7be6cf"></script>
-		<script src="js/page-settings.js?v=60de7c53"></script>
-		<script src="js/mcp.js?v=1a56a667"></script>
-		<script src="js/vfs-browser.js?v=6577e771"></script>
-		<script src="js/vfs-projects.js?v=08fcfe82"></script>
-		<script src="js/vendor/markdown-it-15.0.3.min.js?v=0d6a45cf"></script>
-		<script src="js/document-attachments.js?v=207627b8"></script>
-		<script src="js/transformer-model-assets.js?v=9de616b6"></script>
-		<script src="js/llm-local.js?v=6b65aa7a"></script>
-		<script src="js/stt.js?v=91cb9caf"></script>
-		<script src="js/tts.js?v=123a3be2"></script>
-		<script src="js/chat.js?v=649af640"></script>
+		<script src="js/browser-client.js"></script>
+		<script src="js/workspace-config-store.js"></script>
+		<script src="js/tool-registry.js"></script>
+		<script src="js/workstation-tools.js"></script>
+		<script src="js/agent-settings.js"></script>
+		<script src="js/agent-runtime.js"></script>
+		<script src="js/workstation-state.js"></script>
+		<script src="js/llm-client.js"></script>
+		<script src="js/model-progress.js"></script>
+		<script src="js/skills.js"></script>
+		<script src="js/file-search.js"></script>
+		<script src="js/webfetch.js"></script>
+		<script src="js/llm.js"></script>
+		<script src="js/vfs.js" data-vfs-workspace></script>
+		<script src="js/workspace-runner.js"></script>
+		<script src="js/python-runner.js"></script>
+		<script src="js/javascript-runner.js"></script>
+		<script src="js/page-settings.js"></script>
+		<script src="js/mcp.js"></script>
+		<script src="js/vfs-browser.js"></script>
+		<script src="js/project-catalog.js"></script>
+		<script src="js/vfs-projects.js"></script>
+		<script src="js/vendor/markdown-it-15.0.3.min.js"></script>
+		<script src="js/conversation-store.js"></script>
+		<script src="js/document-attachments.js"></script>
+		<script src="js/transformer-model-assets.js"></script>
+		<script src="js/llm-local.js"></script>
+		<script src="js/stt.js"></script>
+		<script src="js/tts.js"></script>
+		<script src="js/chat.js"></script>
 		<script>mountSusiChat();</script>
 	</body>
 </html>

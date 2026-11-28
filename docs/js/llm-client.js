@@ -86,14 +86,6 @@ globalThis.llmClient = (() => {
         };
     }
 
-    function parseConfigFile(source, path) {
-        const config = JSON.parse(source === undefined ? "{}" : source);
-        if (!config || typeof config !== "object" || Array.isArray(config)) {
-            throw new Error(`${path.split("/").at(-1)} must contain a JSON object.`);
-        }
-        return config;
-    }
-
     function normalizeWorkspaceLLMConfig(current, changes = {}) {
         if (globalThis.llmLocal && Object.hasOwn(changes, "chatLocalPrimary")) {
             // Models saves the primary shown on this device.
@@ -131,6 +123,7 @@ globalThis.llmClient = (() => {
     }
 
     function createConfigStore(vfs, path) {
+        const store = new WorkspaceConfigStore(vfs, path);
         function resolveConfig(saved) {
             const config = normalizeLLMConfig(saved);
             if (globalThis.llmLocal && config.chatProvider === "browser") {
@@ -140,33 +133,29 @@ globalThis.llmClient = (() => {
         }
 
         function update(changes, validate) {
-            return vfs.update(path, source => {
-                const current = parseConfigFile(source, path);
+            return store.update(current => {
                 const next = normalizeWorkspaceLLMConfig(current, changes);
                 if (validate && globalThis.llmLocal && next.chatProvider === "browser") {
                     const { chatLocalPrimary, chatLocalFallback } = resolveConfig(next);
                     llmLocal.modelPair(chatLocalPrimary, chatLocalFallback);
                 }
-                return JSON.stringify(next, null, 2);
+                return next;
             });
         }
 
         return {
             async read() {
-                let source;
-                try { source = await vfs.getasync(path); }
-                catch (error) { if (error !== "Key not found") throw error; }
-                const current = parseConfigFile(source, path);
+                const current = await store.read();
                 const config = normalizeWorkspaceLLMConfig(current);
                 if (Object.keys(config).some(key => current[key] !== config[key]) ||
                     Object.keys(current).some(key => !Object.hasOwn(config, key))) {
                     // Normalize the latest settings atomically, retaining unrelated configuration sections.
-                    return resolveConfig(JSON.parse(await update()));
+                    return resolveConfig(await update());
                 }
                 return resolveConfig(config);
             },
             async write(changes) {
-                return resolveConfig(JSON.parse(await update(changes, true)));
+                return resolveConfig(await update(changes, true));
             }
         };
     }
@@ -193,28 +182,11 @@ globalThis.llmClient = (() => {
         };
     }
 
-    function renderModelProgress(container, state) {
-        const message = state?.message;
-        container.hidden = !message;
-        if (!message) return;
-        const status = container.querySelector("[role=status]");
-        if (status.textContent !== message) status.textContent = message;
-        const progress = container.querySelector("progress");
-        if (state.total > 0) {
-            progress.max = state.total;
-            progress.value = state.loaded;
-        } else progress.removeAttribute("value");
-    }
-
     function requestOptions(config) {
         const settings = { thinking: config.thinking, timeoutMs: config.requestTimeoutMs };
         return config.chatProvider === 'browser'
             ? { ...settings, provider: 'browser', model: config.chatLocalPrimary, fallbackModel: config.chatLocalFallback }
             : { ...settings, baseUrl: config.apihost, model: config.model };
-    }
-
-    function supportsImages(options) {
-        return options.provider !== 'browser' || globalThis.llmLocal?.supportsImages?.(options) === true;
     }
 
     async function inlineBrowserImages(messages, { signal, timeoutMs }) {
@@ -270,9 +242,126 @@ globalThis.llmClient = (() => {
         }));
     }
 
-    function create({ systemPrompt: defaultSystemPrompt = "", getMessages = () => [],
-        normalizeMessages = messages => messages, readApiKey = () => "", browserBackend = globalThis.llmLocal } = {}) {
-        async function modelStatus(options = {}, preparation) {
+    const buildHeaders = (apiKey, hasJsonBody = true) => {
+        const headers = hasJsonBody ? { 'Content-Type': 'application/json' } : {};
+        if (apiKey && apiKey !== '' && apiKey !== '_') {
+            headers.Authorization = 'Bearer ' + apiKey;
+        }
+        return headers;
+    };
+
+    // Decode complete SSE events even when a response splits a line across chunks.
+    async function* readChatEvents(body, onActivity) {
+        const reader = body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let data = [];
+        let eventCharacters = 0;
+        let wireBytes = 0;
+        try {
+            while (true) {
+                const { value, done } = await reader.read();
+                wireBytes += value?.byteLength || 0;
+                if (wireBytes > 16777216) throw new Error('The model stream exceeded the 16 MiB transport limit.');
+                if (value?.byteLength) onActivity?.();
+                buffer += decoder.decode(value, { stream: !done });
+                if (buffer.length > 4194304) throw new Error('The model stream exceeded the 4-million-character event limit.');
+                for (let end = buffer.match(/\r\n?|\n/); end; end = buffer.match(/\r\n?|\n/)) {
+                    const nextIndex = end.index + end[0].length;
+                    if (!done && end[0] === '\r' && nextIndex === buffer.length) break;
+                    const line = buffer.slice(0, end.index);
+                    buffer = buffer.slice(nextIndex);
+                    if (line.startsWith('data:')) {
+                        const part = line.slice(5).replace(/^ /, '');
+                        eventCharacters += part.length + 1;
+                        if (eventCharacters > 4194304) throw new Error('The model stream exceeded the 4-million-character event limit.');
+                        data.push(part);
+                    } else if (!line && data.length) {
+                        const event = data.join('\n');
+                        data = [];
+                        eventCharacters = 0;
+                        yield event;
+                    }
+                }
+                if (done) return;
+            }
+        } finally {
+            // Also closes the response when a [DONE] event arrives before EOF.
+            await reader.cancel().catch(() => {});
+            reader.releaseLock();
+        }
+    }
+
+    function tokenUsage(usage) {
+        const count = value => Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+        const prompt = count(usage?.prompt_tokens);
+        const completion = count(usage?.completion_tokens);
+        const total = count(usage?.total_tokens) ?? count(prompt + completion);
+        if (prompt === undefined && completion === undefined && total === undefined) return;
+        return { prompt_tokens: prompt, completion_tokens: completion, total_tokens: total };
+    }
+
+    // A document can have several clients using the same browser worker.
+    const selectedBrowserModels = new WeakMap();
+
+    class LlmClient {
+        #browserBackend;
+        #readApiKey;
+        #getMessages;
+        #normalizeMessages;
+        #systemPrompt;
+
+        constructor({ browserBackend, readApiKey = () => "", systemPrompt = "",
+            getMessages = () => [], normalizeMessages = messages => messages } = {}) {
+            this.#browserBackend = browserBackend;
+            this.#readApiKey = readApiKey;
+            this.#getMessages = getMessages;
+            this.#normalizeMessages = normalizeMessages;
+            this.#systemPrompt = systemPrompt;
+        }
+
+        supportsImages(options) {
+            return options.provider !== 'browser' || this.#browserBackend?.supportsImages?.(options) === true;
+        }
+
+        selectModel(config) {
+            const browserBackend = this.#browserBackend;
+            const options = requestOptions(config);
+            const canPrepareOnDemand = Boolean(browserBackend && options.provider === 'browser');
+            let selection = selectedBrowserModels.get(browserBackend);
+            if (selection && (!canPrepareOnDemand || selection.model !== options.model ||
+                selection.fallbackModel !== options.fallbackModel)) {
+                selection.controller.abort();
+                browserBackend.close?.();
+                selectedBrowserModels.delete(browserBackend);
+                selection = undefined;
+            }
+            if (canPrepareOnDemand && !selection) {
+                selection = { model: options.model, fallbackModel: options.fallbackModel, controller: new AbortController() };
+                selectedBrowserModels.set(browserBackend, selection);
+            }
+            const status = async (preparation = {}) => {
+                if (!selection) return this.modelStatus(options, preparation);
+                const lifetime = selection.controller.signal;
+                const signal = preparation.signal ? AbortSignal.any([lifetime, preparation.signal]) : lifetime;
+                signal.throwIfAborted();
+                const onProgress = preparation.onProgress && (state => {
+                    if (!signal.aborted) preparation.onProgress(state);
+                });
+                const result = await this.modelStatus(options, { signal, onProgress });
+                signal.throwIfAborted();
+                return result;
+            };
+            return { options, canPrepareOnDemand, status };
+        }
+
+        onModelStatusChange(listener) {
+            return this.#browserBackend?.onModelStatusChange?.(listener) ?? (() => {});
+        }
+
+        async modelStatus(options = {}, preparation) {
+            const browserBackend = this.#browserBackend;
+            preparation?.signal?.throwIfAborted();
             if (options.provider === 'browser') return browserBackend
                 ? browserBackend.status(options, preparation)
                 : { ready: false, label: '', message: 'Browser inference is unavailable on this page.' };
@@ -280,49 +369,27 @@ globalThis.llmClient = (() => {
             return { ready: Boolean(label), label, message: '' };
         }
 
-        async function generateInBrowser(options, stream) {
+        async #generateInBrowser(options) {
+            const browserBackend = this.#browserBackend;
             if (!browserBackend) throw new Error('Browser inference is unavailable on this page.');
-            const startedAt = performance.now();
             // The browser backend times downloads and each device attempt independently.
             options.signal?.throwIfAborted();
-            let firstTokenAt = 0;
-            try {
-                const messages = normalizeMessages(options.messages || getMessages());
-                const { model = options.model, message, finishReason, promptTokens, completionTokens } = await browserBackend.generate({
-                    model: options.model, fallbackModel: options.fallbackModel, device: options.device, thinking: options.thinking, stream,
-                    maxTokens: options.maxTokens, temperature: options.temperature, stopTokens: options.stopTokens,
-                    tools: options.tools, toolChoice: options.toolChoice, timeoutMs: options.timeoutMs,
-                    messages: browserBackend.supportsImages?.(options) ? await inlineBrowserImages(messages, options) : messages,
-                    signal: options.signal,
-                    onStatus: options.onStatus, onProgress: options.onProgress,
-                    onRestart: options.onRestart && (() => { firstTokenAt = 0; options.onRestart(); }),
-                    onToken(text) {
-                        if (!firstTokenAt) firstTokenAt = performance.now();
-                        options.onToken?.(text);
-                    }
-                });
-                options.signal?.throwIfAborted();
-                if (!stream) return {
-                    model,
-                    choices: [{ index: 0, message, finish_reason: finishReason }],
-                    usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens,
-                        total_tokens: promptTokens + completionTokens }
-                };
-                const result = { model, message, finishReason, tokenCount: completionTokens, startedAt,
-                    firstTokenAt, endedAt: performance.now() };
-                options.onDone?.(result);
-                return result;
-            } catch (error) {
-                const failure = options.signal?.aborted ? options.signal.reason : error;
-                if (stream && !options.signal?.aborted) options.onError?.(failure.message);
-                throw failure;
-            }
+            const messages = this.#normalizeMessages(options.messages || this.#getMessages());
+            const { model, message, finishReason, promptTokens, completionTokens } = await browserBackend.generate({
+                model: options.model, fallbackModel: options.fallbackModel, device: options.device, thinking: options.thinking,
+                stream: options.stream, maxTokens: options.maxTokens, temperature: options.temperature, stopTokens: options.stopTokens,
+                tools: options.tools, toolChoice: options.toolChoice, timeoutMs: options.timeoutMs,
+                messages: this.supportsImages(options) ? await inlineBrowserImages(messages, options) : messages,
+                signal: options.signal, onStatus: options.onStatus, onProgress: options.onProgress,
+                onRestart: options.onRestart, onToken: options.onToken
+            });
+            return { model, message, finishReason, usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens } };
         }
 
         // Build /v1/chat/completions payload from history + overrides.
-        const buildChatPayload = (options = {}) => {
+        buildChatPayload(options = {}) {
             const model = options.model;
-            const messages = normalizeMessages(options.messages || getMessages());
+            const messages = this.#normalizeMessages(options.messages || this.#getMessages());
             if (!model) {
                 throw new Error('Missing model');
             }
@@ -331,6 +398,7 @@ globalThis.llmClient = (() => {
                 messages: messages,
                 stream: options.stream !== false
             };
+            if (payload.stream) payload.stream_options = { include_usage: true };
             const maxTokens = options.maxTokens;
             const temperature = options.temperature;
             const stopTokens = Array.isArray(options.stopTokens) ? options.stopTokens : null;
@@ -350,90 +418,50 @@ globalThis.llmClient = (() => {
                 payload.reasoning_effort = 'none';
             }
             return payload;
-        };
+        }
 
-        const buildHeaders = (apiKey, hasJsonBody = true) => {
-            const headers = hasJsonBody ? { 'Content-Type': 'application/json' } : {};
-            if (apiKey && apiKey !== '' && apiKey !== '_') {
-                headers.Authorization = 'Bearer ' + apiKey;
-            }
-            return headers;
-        };
-
-        const requestChat = async (options) => {
+        async #requestChat(options) {
             if (!options.baseUrl) {
                 throw new Error('Missing baseUrl');
             }
-            const payload = buildChatPayload(options);
+            const payload = this.buildChatPayload(options);
             const lifetime = llmRequestLifetime(options.signal, options.timeoutMs);
             try {
-                const response = await fetch(options.baseUrl + '/v1/chat/completions', {
-                    method: 'POST',
-                    headers: buildHeaders(llmEndpointKey(options.baseUrl, options.apiKey ?? readApiKey(options.baseUrl))),
-                    body: JSON.stringify(payload),
-                    signal: lifetime.signal
-                });
-                if (!response.ok) {
+                const headers = buildHeaders(llmEndpointKey(options.baseUrl, options.apiKey ?? this.#readApiKey(options.baseUrl)));
+                for (;;) {
+                    const response = await fetch(options.baseUrl + '/v1/chat/completions', {
+                        method: 'POST', headers, body: JSON.stringify(payload), signal: lifetime.signal
+                    });
+                    if (response.ok) return { response, ...lifetime };
                     const data = await readLLMJSON(response, lifetime.touch).catch(() => null);
+                    // Some compatible endpoints reject the optional usage field during request validation.
+                    const detail = data?.error ?? data?.detail ?? data?.message;
+                    if (payload.stream_options && [400, 422].includes(response.status) &&
+                        /\b(stream_options|include_usage)\b/i.test(JSON.stringify(detail))) {
+                        delete payload.stream_options;
+                        continue;
+                    }
                     throw new Error(data?.error?.message || 'HTTP ' + response.status);
                 }
-                return { response, ...lifetime };
             } catch (error) { lifetime.dispose(); throw lifetime.signal.aborted ? lifetime.signal.reason : error; }
-        };
-
-        // Decode complete SSE events even when a response splits a line across chunks.
-        async function* readChatEvents(body, onActivity) {
-            const reader = body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let data = [];
-            let eventCharacters = 0;
-            let wireBytes = 0;
-            try {
-                while (true) {
-                    const { value, done } = await reader.read();
-                    wireBytes += value?.byteLength || 0;
-                    if (wireBytes > 16777216) throw new Error('The model stream exceeded the 16 MiB transport limit.');
-                    if (value?.byteLength) onActivity?.();
-                    buffer += decoder.decode(value, { stream: !done });
-                    if (buffer.length > 4194304) throw new Error('The model stream exceeded the 4-million-character event limit.');
-                    for (let end = buffer.match(/\r\n?|\n/); end; end = buffer.match(/\r\n?|\n/)) {
-                        const nextIndex = end.index + end[0].length;
-                        if (!done && end[0] === '\r' && nextIndex === buffer.length) break;
-                        const line = buffer.slice(0, end.index);
-                        buffer = buffer.slice(nextIndex);
-                        if (line.startsWith('data:')) {
-                            const part = line.slice(5).replace(/^ /, '');
-                            eventCharacters += part.length + 1;
-                            if (eventCharacters > 4194304) throw new Error('The model stream exceeded the 4-million-character event limit.');
-                            data.push(part);
-                        } else if (!line && data.length) {
-                            const event = data.join('\n');
-                            data = [];
-                            eventCharacters = 0;
-                            yield event;
-                        }
-                    }
-                    if (done) return;
-                }
-            } finally {
-                // Also closes the response when a [DONE] event arrives before EOF.
-                await reader.cancel().catch(() => {});
-                reader.releaseLock();
-            }
         }
 
-        const streamChat = async (options = {}) => {
-            if (options.provider === 'browser') return generateInBrowser(options, true);
-            const startedAt = performance.now();
-            let tokenCount = 0;
-            let firstTokenAt = 0;
+        async #generateAtEndpoint(options) {
+            let model;
+            let usage;
             let content = '';
             let finishReason;
             let responseCharacters = 0;
             const calls = new Map();
-            const request = await requestChat({ ...options, stream: true });
+            const request = await this.#requestChat(options);
             const response = request.response;
+
+            function readChoice(data) {
+                if (data?.error) throw new Error(data.error.message || String(data.error));
+                if (typeof data?.model === 'string' && data.model) model = data.model;
+                if (data?.usage) usage = { ...usage, ...data.usage };
+                return data?.choices?.[0];
+            }
 
             const addDelta = (delta) => {
                 if (!delta || typeof delta !== 'object' || (delta.content != null && typeof delta.content !== 'string') ||
@@ -441,8 +469,6 @@ globalThis.llmClient = (() => {
                 responseCharacters += (delta.content?.length || 0) + JSON.stringify(delta.tool_calls || []).length;
                 if (responseCharacters > 4194304) throw new Error('The model response exceeded the 4-million-character limit.');
                 if (delta.content) {
-                    if (!firstTokenAt) firstTokenAt = performance.now();
-                    tokenCount += 1;
                     content += delta.content;
                     options.onToken?.(delta.content);
                 }
@@ -465,10 +491,8 @@ globalThis.llmClient = (() => {
             };
 
             try {
-                if (response.headers.get('content-type')?.includes('application/json')) {
-                    const data = await readLLMJSON(response, request.touch);
-                    if (data?.error) throw new Error(data.error.message || String(data.error));
-                    const choice = data?.choices?.[0];
+                if (!options.stream || response.headers.get('content-type')?.includes('application/json')) {
+                    const choice = readChoice(await readLLMJSON(response, request.touch));
                     if (!choice?.message) throw new Error('The model returned no message.');
                     addDelta(choice.message);
                     finishReason = choice.finish_reason;
@@ -480,9 +504,7 @@ globalThis.llmClient = (() => {
                             sawDone = true;
                             break;
                         }
-                        const data = JSON.parse(event);
-                        if (data?.error) throw new Error(data.error.message || String(data.error));
-                        const choice = data?.choices?.[0];
+                        const choice = readChoice(JSON.parse(event));
                         if (choice?.delta) addDelta(choice.delta);
                         if (choice?.finish_reason) finishReason = choice.finish_reason;
                     }
@@ -496,52 +518,63 @@ globalThis.llmClient = (() => {
                         throw new Error('The model returned an incomplete tool call.');
                     }
                 }
-                const result = { message, finishReason, tokenCount, startedAt, firstTokenAt, endedAt: performance.now() };
-                options.onDone?.(result);
-                return result;
+                return { model, message, finishReason, usage };
             } catch (error) {
-                const failure = request.signal.aborted ? request.signal.reason : error;
-                if (!options.signal?.aborted) options.onError?.(failure.message);
-                throw failure;
+                throw request.signal.aborted ? request.signal.reason : error;
             } finally {
                 request.dispose();
             }
-        };
+        }
 
-        const completeChat = async (options = {}) => {
-            if (options.provider === 'browser') return generateInBrowser(options, false);
-            const request = await requestChat({ ...options, stream: false });
-            try { return await readLLMJSON(request.response, request.touch); }
-            catch (error) { throw request.signal.aborted ? request.signal.reason : error; }
-            finally { request.dispose(); }
-        };
+        async #generateChat(options, stream) {
+            const startedAt = performance.now();
+            let firstTokenAt = 0;
+            const request = { ...options, stream,
+                onToken: stream ? text => {
+                    if (!firstTokenAt) firstTokenAt = performance.now();
+                    options.onToken?.(text);
+                } : undefined,
+                onRestart: options.onRestart && (() => { firstTokenAt = 0; options.onRestart(); })
+            };
+            try {
+                const reply = options.provider === 'browser' ? await this.#generateInBrowser(request) : await this.#generateAtEndpoint(request);
+                options.signal?.throwIfAborted();
+                const usage = tokenUsage(reply.usage);
+                const result = { model: reply.model || options.model, message: reply.message, finishReason: reply.finishReason,
+                    usage, tokenCount: usage?.completion_tokens, startedAt, firstTokenAt, endedAt: performance.now() };
+                if (stream) options.onDone?.(result);
+                return result;
+            } catch (error) {
+                if (stream && !options.signal?.aborted) options.onError?.(error.message);
+                throw options.signal?.aborted ? options.signal.reason : error;
+            }
+        }
 
-        // Lightweight model warmup; returns answer + token usage.
-        const warmup = async (options = {}) => {
-            const systemPrompt = typeof options.systemPrompt === 'string' ? options.systemPrompt : defaultSystemPrompt;
+        streamChat(options = {}) { return this.#generateChat(options, true); }
+
+        completeChat(options = {}) { return this.#generateChat(options, false); }
+
+        async warmup(options = {}) {
+            const systemPrompt = typeof options.systemPrompt === 'string' ? options.systemPrompt : this.#systemPrompt;
             const messages = [{ role: 'system', content: systemPrompt }];
-            const data = await completeChat({
+            const { message, usage } = await this.completeChat({
                 ...options,
                 messages
             });
-            const answer = data.choices && data.choices[0] && data.choices[0].message
-                ? data.choices[0].message.content
-                : '';
-            const usage = data.usage || {};
             return {
-                answer,
-                completion_tokens: usage.completion_tokens || 0,
-                prompt_tokens: usage.prompt_tokens || 0,
-                total_tokens: usage.total_tokens || 0
+                answer: message.content,
+                completion_tokens: usage?.completion_tokens,
+                prompt_tokens: usage?.prompt_tokens,
+                total_tokens: usage?.total_tokens
             };
-        };
+        }
 
-        async function requestJSON(path, options, body) {
+        async #requestJSON(path, options, body) {
             if (!options.baseUrl) throw new Error('Missing baseUrl');
             const lifetime = llmRequestLifetime(options.signal, options.timeoutMs ?? 30000);
             try {
                 const response = await fetch(options.baseUrl + path, { method: body === undefined ? 'GET' : 'POST',
-                    headers: buildHeaders(llmEndpointKey(options.baseUrl, options.apiKey ?? readApiKey(options.baseUrl)), body !== undefined),
+                    headers: buildHeaders(llmEndpointKey(options.baseUrl, options.apiKey ?? this.#readApiKey(options.baseUrl)), body !== undefined),
                     ...(body !== undefined ? { body: JSON.stringify(body) } : {}), signal: lifetime.signal });
                 const data = await readLLMJSON(response, lifetime.touch).catch(error => {
                     if (response.ok) throw error;
@@ -555,33 +588,35 @@ globalThis.llmClient = (() => {
         }
 
         // Provider operations use the same credential scope, cancellation, and response deadline.
-        const llamaCppLoadModel = (options = {}) => requestJSON('/models/load', options, { model: options.model });
-        const listModels = (options = {}) => requestJSON('/v1/models', options);
-        const ollamaPull = async (options = {}) => {
-            try { return await requestJSON('/api/pull', options, { model: options.model, stream: false }); }
+        llamaCppLoadModel(options = {}) {
+            return this.#requestJSON('/models/load', options, { model: options.model });
+        }
+
+        listModels(options = {}) { return this.#requestJSON('/v1/models', options); }
+
+        async ollamaPull(options = {}) {
+            try { return await this.#requestJSON('/api/pull', options, { model: options.model, stream: false }); }
             catch (error) {
                 if (options.signal?.aborted || ![404, 405].includes(error.status)) throw error;
-                return llamaCppLoadModel(options);
+                return this.llamaCppLoadModel(options);
             }
-        };
-        const ollamaDelete = (options = {}) => requestJSON('/api/delete', options, { model: options.model });
+        }
 
-        // Public API surface (single object for easy embedding).
-        return {
-            buildChatPayload,
-            modelStatus,
-            streamChat,
-            completeChat,
-            warmup,
-            listModels,
-            llamaCppLoadModel,
-            ollamaPull,
-            ollamaDelete
-        };
+        ollamaDelete(options = {}) {
+            return this.#requestJSON('/api/delete', options, { model: options.model });
+        }
     }
 
-    return { create, requestOptions, supportsImages, normalizeConfig: normalizeLLMConfig, createConfigStore, parseConfigFile,
-        createSessionKeyStore, renderModelProgress,
+    globalThis.LlmClient = LlmClient;
+
+    // Workstation and generated apps share the browser worker installed in their own page.
+    function create({ browserBackend = globalThis.llmLocal, ...options } = {}) {
+        return new LlmClient({ ...options, browserBackend });
+    }
+
+    return { create, requestOptions, normalizeConfig: normalizeLLMConfig, createConfigStore,
+        parseConfigFile: (source, path) => WorkspaceConfigStore.parse(source, path),
+        createSessionKeyStore,
         validateApiKey: llmEndpointKey, isRetiredEndpoint, defaultOllamaPort: DEFAULT_OLLAMA_PORT };
 })();
 

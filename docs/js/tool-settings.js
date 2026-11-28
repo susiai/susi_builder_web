@@ -6,7 +6,7 @@
 	const status = document.getElementById("agent-tools-status");
 	const save = document.getElementById("agent-tools-save");
 	const maxToolCalls = document.getElementById("agent-max-tool-calls");
-	const client = createLLM();
+	const registry = new WorkstationToolRegistry();
 	const fields = new Map();
 	let baseline = {};
 	let baselineLimit;
@@ -14,7 +14,7 @@
 	let saving = false;
 	let readRequest = 0;
 
-	for (const { function: tool } of client.listTools({}, { includeBrowser: true })) {
+	for (const { function: tool } of registry.listTools({}, { includeBrowser: true })) {
 		const item = document.createElement("div");
 		const label = document.createElement("label");
 		const name = document.createElement("code");
@@ -55,7 +55,7 @@
 
 	function showSettings(settings) {
 		baseline = {};
-		for (const { function: tool } of client.listTools(settings.toolDescriptions, { includeBrowser: true })) {
+		for (const { function: tool } of registry.listTools(settings.toolDescriptions, { includeBrowser: true })) {
 			fields.get(tool.name).value = tool.description;
 			baseline[tool.name] = tool.description;
 		}

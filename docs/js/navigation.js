@@ -19,10 +19,11 @@ function markCurrentPage() {
 	pageSelect.value = current?.href || "";
 }
 
-function updateFrame() {
+function updateFrame(picker) {
 	if (parent === window) return;
-	const bounds = openGroup?.submenu.getBoundingClientRect();
-	const extraHeight = bounds ? Math.ceil(bounds.bottom - siteNav.getBoundingClientRect().bottom) : 0;
+	const bounds = (picker || openGroup?.submenu)?.getBoundingClientRect();
+	const bottom = picker ? bounds.top + picker.scrollHeight + 2 * picker.clientTop - picker.scrollTop : bounds?.bottom;
+	const extraHeight = bottom ? Math.min(480, Math.max(0, Math.ceil(bottom - siteNav.getBoundingClientRect().bottom))) : 0;
 	// Local-file pages have an opaque origin. The parent verifies the message comes from its navigation frame.
 	parent.postMessage({ type: "susi.navigation.layout", extraHeight, left: bounds?.left ?? 0, right: bounds?.right ?? 0 },
 		window.origin === "null" ? "*" : window.origin);
@@ -84,6 +85,9 @@ document.addEventListener("keydown", event => {
 	trigger.focus();
 });
 window.addEventListener("blur", () => showGroup());
+document.addEventListener("toggle", event => {
+	if (event.target.matches(".select-picker")) updateFrame(event.newState === "open" ? event.target : null);
+}, true);
 window.addEventListener("resize", () => {
 	if (!openGroup) return;
 	if (!openGroup.trigger.getClientRects().length) showGroup();

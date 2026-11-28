@@ -1,30 +1,5 @@
 "use strict";
 
-const VFS_APPS_DIRECTORY = "/Apps/";
-
-function isVfsProjectIndex(path) {
-	if (!path.endsWith("/index.html") || path.startsWith(".webstation/")) return false;
-	const root = path.slice(0, path.indexOf("/") + 1);
-	// Both the current and former app directories list only their direct app folders.
-	return (root !== VFS_APPS_DIRECTORY.slice(1) && root !== "apps/") ||
-		/^[^/]+\/index\.html$/.test(path.slice(root.length));
-}
-
-function findVfsProjects(paths) {
-	return paths
-		.filter(isVfsProjectIndex)
-		.map((path) => `/${path.slice(0, -"index.html".length)}`)
-		.sort((a, b) => a.localeCompare(b));
-}
-
-function createVfsApp(vfs, name, entries, { indexHtml = "", reuseMatching = false } = {}) {
-	const files = entries ?? [
-		{ path: "index.html", value: indexHtml },
-		{ path: "app.json", value: JSON.stringify({ version: 1, name, pinned: false }, null, 2) + "\n" }
-	];
-	return vfs.addFolderTree(name, files, { parent: VFS_APPS_DIRECTORY, reuseMatching });
-}
-
 function isVfsPreviewFolder(path) {
 	return typeof path === "string" && path.startsWith("/") && path.endsWith("/") &&
 		(path === "/" || path.slice(1, -1).split("/").every(part =>

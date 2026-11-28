@@ -249,24 +249,19 @@ const { susiMcpClient, susiMcp } = (() => {
 	}
 
 	async function read(vfs) {
-		let source;
-		try { source = await vfs.getasync(LLM_CONFIG_PATH); }
-		catch (error) { if (error !== "Key not found") throw error; }
-		return serversIn(parseLLMConfigFile(source, true));
+		return serversIn(await new WorkspaceConfigStore(vfs).read());
 	}
 
 	// Update the current config in one transaction, including when another page edits unrelated settings.
 	async function update(vfs, change) {
-		let servers;
-		await vfs.update(LLM_CONFIG_PATH, source => {
-			const config = parseLLMConfigFile(source, true);
-			servers = serversIn(config);
+		const saved = await new WorkspaceConfigStore(vfs).update(config => {
+			const servers = serversIn(config);
 			change(servers);
 			config.mcpServers = servers;
 			serversIn(config);
-			return JSON.stringify(config, null, 2);
+			return config;
 		});
-		return servers;
+		return saved.mcpServers;
 	}
 
 	function existing(servers, reference) {
@@ -338,9 +333,9 @@ const { susiMcpClient, susiMcp } = (() => {
 	}
 
 	function select(vfs, reference, aliases, enabled) {
-		const changed = new Set(aliases);
 		if (typeof enabled !== "boolean") throw new Error("Invalid MCP tool selection.");
 		return update(vfs, servers => {
+			const changed = new Set(aliases);
 			const server = existing(servers, reference);
 			for (const tool of server.tools) if (changed.delete(tool.alias)) tool.enabled = enabled;
 			if (changed.size) throw new Error("The tool list changed. Review the current list.");

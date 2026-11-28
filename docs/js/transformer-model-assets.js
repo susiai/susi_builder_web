@@ -16,7 +16,7 @@ const transformerModelAssets = (() => {
 	].map(([name, size, digest]) => ({ name, size, digest, path: `/Models/Chat/runtime/${runtimeVersion}/${name}`,
 		url: `https://cdn.jsdelivr.net/npm/onnxruntime-web@${runtimeVersion}/dist/${name}` }));
 	const base = window.__susiPreview ? new URL("js/", document.baseURI) : document.currentScript.src;
-	const bundle = new URL("vendor/transformers-4.3.2.browser.js?v=8fb21031", base);
+	const bundle = new URL("vendor/transformers-4.3.2.browser.js", base);
 	let moduleRequest;
 
 	async function stored(vfs, { path, size }) {

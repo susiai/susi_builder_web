@@ -5,33 +5,46 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
 		<meta name="color-scheme" content="dark" />
 		<title>SUSI Builder Table editor</title>
-		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
-		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
-		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
-		<link rel="stylesheet" href="css/table.css?v=8a017efc" />
-		<script defer src="js/vfs.js?v=a4b76514"></script>
-		<script defer src="js/page-settings.js?v=60de7c53"></script>
-		<script defer src="js/vfs-browser.js?v=6577e771"></script>
-		<script defer src="js/vendor/lossless-json-4.3.3.min.js?v=0fa78b94"></script>
-		<script defer src="js/vendor/hyparquet-1.32.0.min.js?v=f5167313"></script>
-		<script defer src="js/llm-client.js?v=cead3d4b"></script>
-		<script defer src="js/llm.js?v=1d26062a"></script>
-		<script defer src="js/transformer-model-assets.js?v=9de616b6"></script>
-		<script defer src="js/llm-local.js?v=6b65aa7a"></script>
-		<script defer src="js/table-formats.js?v=89c789e9"></script>
-		<script defer src="js/table-operations.js?v=3b0d7514"></script>
-		<script defer src="js/table-sheet.js?v=7cbd570b"></script>
-		<script defer src="js/table-formulas.js?v=6b1597e7"></script>
-		<script defer src="js/table-model.js?v=6bddaab0"></script>
-		<script defer src="js/table-charts.js?v=7759b231"></script>
-		<script defer src="js/table-chart-xlsx.js?v=935143e2"></script>
-		<script defer src="js/table-workbook.js?v=a01dfde8"></script>
-		<script defer src="js/table-autocomplete.js?v=1d1178d4"></script>
-		<script defer src="js/table-formula-help.js?v=1e0968d4"></script>
-		<script defer src="js/table-reference-picker.js?v=8a208c8b"></script>
-		<script defer src="js/table-view-controls.js?v=aea35563"></script>
-		<script defer src="js/table.js?v=a1f767ad"></script>
-		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+		<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css" />
+		<link rel="stylesheet" href="css/select.css" />
+		<link rel="stylesheet" href="css/prompt-chat.css" />
+		<link rel="stylesheet" href="css/table.css" />
+		<script defer src="js/vfs.js" data-vfs-workspace></script>
+		<script defer src="js/workspace-config-store.js"></script>
+		<script defer src="js/page-settings.js"></script>
+		<script defer src="js/vfs-browser.js"></script>
+		<script defer src="js/vendor/lossless-json-4.3.3.min.js"></script>
+		<script defer src="js/vendor/hyparquet-1.32.0.min.js"></script>
+		<script defer src="js/llm-client.js"></script>
+		<script defer src="js/model-progress.js"></script>
+		<script defer src="js/llm.js"></script>
+		<script defer src="js/transformer-model-assets.js"></script>
+		<script defer src="js/llm-local.js"></script>
+		<script defer src="js/table-formats.js"></script>
+		<script defer src="js/table-operations.js"></script>
+		<script defer src="js/table-sheet.js"></script>
+		<script defer src="js/table-formulas.js"></script>
+		<script defer src="js/table-model.js"></script>
+		<script defer src="js/table-charts.js"></script>
+		<script defer src="js/table-chart-xlsx.js"></script>
+		<script defer src="js/workbook.js"></script>
+		<script defer src="js/table-workbook.js"></script>
+		<script defer src="js/table-autocomplete.js"></script>
+		<script defer src="js/table-formula-help.js"></script>
+		<script defer src="js/table-reference-picker.js"></script>
+		<script defer src="js/table-view-controls.js"></script>
+		<script defer src="js/tool-registry.js"></script>
+		<script defer src="js/workstation-tools.js"></script>
+		<script defer src="js/agent-runtime.js"></script>
+		<script defer src="js/agent-settings.js"></script>
+		<script defer src="js/vendor/markdown-it-15.0.3.min.js"></script>
+		<script defer src="js/table-chat.js"></script>
+		<script defer src="js/table-chat-panel.js"></script>
+		<script defer src="js/table.js"></script>
+		<script defer src="js/select-picker.js"></script>
+		<script defer src="js/navigation-frame.js"></script>
 	</head>
 	<body id="table-page">
 		<iframe id="site-menu" title="Pages" src="navigation.html#table"></iframe>
@@ -40,6 +53,14 @@
 				<header id="sheet-title">
 					<h1>Table editor</h1><span id="file-name">Untitled.xlsx</span><span id="unsaved" hidden>Unsaved</span>
 					<span id="file-location">New workbook</span>
+					<div id="editing-mode" role="group" aria-label="Editing mode">
+						<button type="button" data-mode="csv" aria-pressed="false">CSV</button>
+						<button type="button" data-mode="xlsx" aria-pressed="true">Workbook</button>
+					</div>
+					<button type="button" id="table-chat-toggle" class="prompt-chat-toggle" aria-controls="table-chat"
+						aria-expanded="false" aria-keyshortcuts="Control+I Meta+I" title="Table chat (Ctrl+I / Command+I)">
+						<span aria-hidden="true">✦</span> Chat
+					</button>
 					<nav aria-label="File and history"><button id="new-table">New table</button><button id="new-workbook">New workbook</button><button id="open-table">Open…</button>
 						<button id="save-table">Save</button><button id="save-as">Save as…</button>
 						<button id="undo" title="Undo (Ctrl or Command + Z)">Undo</button><button id="redo">Redo</button></nav>
@@ -98,6 +119,16 @@
 					<button type="button" id="append-row">+ Add row</button>
 				</div>
 				<section id="sheet-charts" aria-label="Worksheet charts" hidden></section>
+				<form id="table-chat" class="prompt-chat" aria-label="Table chat" hidden>
+					<label for="table-chat-prompt"><span aria-hidden="true">✦</span> Table chat <small id="table-chat-scope"></small></label>
+					<button id="table-chat-close" class="prompt-chat-close" type="button" aria-label="Close table chat">×</button>
+					<textarea id="table-chat-prompt" class="prompt-chat-input" rows="2" aria-describedby="table-chat-scope"
+						placeholder="Ask a question or describe a cell edit…" required></textarea>
+					<div class="prompt-chat-actions">
+						<span id="table-chat-status" class="prompt-chat-status" role="status"></span>
+						<button id="table-chat-send" class="prompt-chat-send" type="submit" disabled>Send <span aria-hidden="true">↑</span></button>
+					</div>
+				</form>
 				<div id="sheet-strip"><nav id="worksheet-tabs" aria-label="Worksheets"></nav>
 					<button id="sheet-add" title="Add worksheet" aria-label="Add worksheet">+</button>
 					<button id="sheet-options" title="Worksheet options" aria-label="Worksheet options" aria-haspopup="dialog">⋯</button>
@@ -118,9 +149,9 @@
 				<summary>Table help <span class="key-hints"><kbd>F2</kbd> Edit cell <span>·</span> <kbd>Shift</kbd> + arrow to extend selection</span></summary>
 				<p id="table-help">Double-click a cell to edit. Click a heading to select rows or columns. Drag a column header or row number to move it.
 					Drag the selection handle to extend a series. Drag a column edge to resize or double-click it to fit.
-					Start a formula with <code>=</code>, for example <code>=SUM(A1:A5)</code> or <code>=WENN(B1&gt;0;B1;0)</code>. Use <code>PI</code> or <code>E</code> as a constant, for example <code>=LN(E)</code>. Choose a suggestion with the arrow keys and <kbd>Tab</kbd> or <kbd>Enter</kbd>. Press <kbd>F4</kbd> on a reference to cycle through <code>B2</code>, <code>$B$2</code>, <code>B$2</code> and <code>$B2</code>. For a range, select one endpoint to change it separately. Trigonometric functions take angles in radians. For degrees, use <code>=SIN(RADIANS(30))</code>.
+					<span id="workbook-help">Start a formula with <code>=</code>, for example <code>=SUM(A1:A5)</code> or <code>=IF(B1&gt;0,B1,0)</code>. Use <code>PI</code> or <code>E</code> as a constant, for example <code>=LN(E)</code>. Choose a suggestion with the arrow keys and <kbd>Tab</kbd> or <kbd>Enter</kbd>. Press <kbd>F4</kbd> on a reference to cycle through <code>B2</code>, <code>$B$2</code>, <code>B$2</code> and <code>$B2</code>. For a range, select one endpoint to change it separately. Trigonometric functions take angles in radians. For degrees, use <code>=SIN(RADIANS(30))</code>.
 					When a formula expects a value, click a cell or drag across cells to insert a range. The colors in the formula bar match the outlines on the sheet. Open formula help with <kbd>F1</kbd> or the <strong>ƒx ?</strong> button. Join text with <code>=A1 &amp; " " &amp; B1</code>. Use <code>=TEXTJOIN(", ",TRUE,A1:A5)</code> to separate nonempty cells with a comma and a space.
-					<code>=LLM(A1)</code> asks the configured chat model when the question changes. XLSX keeps the formula and answer.
+					<code>=CHAT(A1)</code> and <code>=LLM(A1)</code> ask the configured chat model and share the saved answer for the same question. XLSX keeps the formula and answer.</span>
 					From a selected cell, <kbd>Alt</kbd> + ←/→ moves its column and <kbd>Alt</kbd> + ↑/↓ moves its row.</p>
 			</details>
 		</main>
@@ -132,6 +163,28 @@
 			<button role="menuitem" data-command="delete-columns">Delete selected columns</button>
 		</div>
 		<div id="formula-functions" role="listbox" aria-label="Formula functions and constants" hidden></div>
+		<dialog id="table-chat-result" class="prompt-chat-result" aria-labelledby="table-chat-heading">
+			<h2 id="table-chat-heading">Table chat</h2>
+			<p id="table-chat-result-scope"></p>
+			<div class="table-chat-review">
+				<div id="table-chat-reply" class="prompt-chat-output"></div>
+				<table id="table-chat-preview" hidden>
+					<thead><tr><th>Cell</th><th>Before</th><th>After</th></tr></thead><tbody></tbody>
+				</table>
+				<button type="button" id="table-chat-more" hidden>Show more changes</button>
+			</div>
+			<p id="table-chat-error" role="alert" hidden></p>
+			<div class="dialog-actions"><button id="table-chat-dismiss" type="button" autofocus>Close</button>
+				<button id="table-chat-apply" type="button" hidden>Apply</button></div>
+		</dialog>
+		<dialog id="mode-dialog" aria-labelledby="mode-title" aria-describedby="mode-losses">
+			<h2 id="mode-title"></h2>
+			<ul id="mode-losses"></ul>
+			<form id="mode-form">
+				<p class="dialog-status" role="status"></p>
+				<div class="dialog-actions"><button type="button" data-close autofocus>Cancel</button><button id="confirm-mode" type="submit"></button></div>
+			</form>
+		</dialog>
 		<dialog id="chart-dialog" aria-labelledby="chart-heading"><h2 id="chart-heading">Chart from selection</h2>
 			<form id="chart-form">
 				<output id="chart-source"></output>

@@ -103,8 +103,90 @@ function downloadVfsBlob(blob, name) {
 	setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function downloadVfsFile(vfs, path) {
+async function vfsDownloadBlob(vfs, path) {
 	const contents = await vfs.getasync(path);
 	const type = typeof contents === "string" ? "text/plain" : "application/octet-stream";
-	downloadVfsBlob(new Blob([contents], { type }), vfs.baseName(path));
+	return new Blob([contents], { type });
+}
+
+async function downloadVfsFile(vfs, path) {
+	downloadVfsBlob(await vfsDownloadBlob(vfs, path), vfs.baseName(path));
+}
+
+async function importDroppedVfsFolder(vfs, parent, directory) {
+	const entries = [];
+	async function collect(folder, prefix) {
+		const reader = folder.createReader();
+		// A directory reader can return multiple batches, including on Chromium.
+		while (true) {
+			const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+			if (!batch.length) break;
+			for (const child of batch) {
+				const path = prefix + child.name;
+				if (child.isDirectory) {
+					entries.push({ path: path + "/", value: "" });
+					await collect(child, path + "/");
+				} else {
+					const file = await new Promise((resolve, reject) => child.file(resolve, reject));
+					const bytes = new Uint8Array(await file.arrayBuffer());
+					entries.push({ path, value: vfs.fileSystem.fileValue(bytes) });
+				}
+			}
+		}
+	}
+	await collect(directory, "");
+	return vfs.addFolderTree(directory.name, entries, { parent });
+}
+
+async function exportVfsFolderToDirectory(vfs, path, destination) {
+	const entries = await vfs.readFolderTree(path);
+	const base = vfs.baseName(path) || "VFS";
+	async function exists(parent, name) {
+		try { await parent.getFileHandle(name); return true; }
+		catch (error) {
+			if (error.name === "NotFoundError") return false;
+			if (error.name === "TypeMismatchError") return true;
+			throw error;
+		}
+	}
+
+	async function writeTree() {
+		let name = base;
+		for (let suffix = 2; await exists(destination, name); suffix++) name = base + " (" + suffix + ")";
+		const root = await destination.getDirectoryHandle(name, { create: true });
+		const directories = new Map([["", root]]);
+		let currentPath = "";
+		try {
+			for (const entry of entries) {
+				currentPath = entry.path;
+				const parts = entry.path.split("/");
+				const filename = parts.pop();
+				let parent = root, prefix = "";
+				for (const part of parts) {
+					prefix += part + "/";
+					if (!directories.has(prefix)) {
+						if (await exists(parent, part)) throw new Error("A matching folder name already exists.");
+						directories.set(prefix, await parent.getDirectoryHandle(part, { create: true }));
+					}
+					parent = directories.get(prefix);
+				}
+				if (!filename) continue;
+				if (await exists(parent, filename)) throw new Error("A matching file name already exists.");
+				const file = await parent.getFileHandle(filename, { create: true });
+				const writer = await file.createWritable();
+				try {
+					await writer.write(new Blob([entry.value]));
+					await writer.close();
+				} catch (error) {
+					await writer.abort().catch(() => {});
+					throw error;
+				}
+			}
+		} catch (error) {
+			throw new Error(`Export incomplete in ${name} at ${currentPath}. ${error.message || error}`);
+		}
+		return name;
+	}
+	// Two Explorer tabs exporting to the same OS folder must choose distinct names.
+	return navigator.locks ? navigator.locks.request("susi-explorer-folder-export", writeTree) : writeTree();
 }

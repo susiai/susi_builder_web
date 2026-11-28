@@ -2,11 +2,11 @@
 
 const tableCharts = (() => {
 	const types = {bar:"Column",line:"Line",pie:"Pie"};
-	const url = new URL("../jsx/plotly-basic-4.3.0.min.js",document.currentScript.src);
+	const scriptURL = globalThis.document?.currentScript?.src;
 	let loading;
 	function library() {
 		if (!loading) loading = new Promise((resolve,reject) => {
-			const script = document.createElement("script"); script.src = url;
+			const script = document.createElement("script"); script.src = new URL("../jsx/plotly-basic-4.3.0.min.js",scriptURL);
 			script.onload = () => resolve(window.Plotly);
 			script.onerror = () => { script.remove(); loading = null; reject(new Error("Could not load the chart renderer.")); };
 			document.head.append(script);

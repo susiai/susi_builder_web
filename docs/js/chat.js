@@ -1,7 +1,7 @@
 "use strict";
 
 // Mount one workbench per document. App launchers can supply scoped storage and model credentials.
-function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
+function mountSusiChat({ conversationStore, modelHref = "models.html", readApiKey,
 	allowBrowser = true, showProjectPreview = true, demo = false, container = document.body, projectsRoot } = {}) {
 	if (document.getElementById("chat")) throw new Error("Chat is already mounted.");
 	container.insertAdjacentHTML("beforeend", chatMarkup(container !== document.body));
@@ -13,17 +13,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		document.getElementById("chat-agent").disabled = true;
 		return;
 	}
-	const historyStorage = historyStore || {
-		getItem: key => localStorage.getItem(key),
-		setItem: (key, value) => localStorage.setItem(key, value)
-	};
-	if (historyStore) historyStore.onError = error => {
-		historyUnsaved = true;
-		historyConflict = error.code === "EEXIST";
-		showStorageNote(error.message || "This browser could not save the conversation.");
-		if (historyConflict) generation?.abort(new DOMException("Conversation changed in another page.", "AbortError"));
-		updateControls();
-	};
+	const conversations = conversationStore || ConversationStore.forBrowser();
 	for (const link of document.querySelectorAll('#chat a[href="models.html"]')) {
 		link.href = modelHref;
 		if (link.closest("#chat-model-warning") && modelHref !== "models.html") link.textContent = "Select and save a model in Configuration";
@@ -64,7 +54,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 	const chatCopyStatus = document.getElementById("chat-copy-status");
 	const chatExport = document.getElementById("chat-export");
 	chatExport.addEventListener("click", () => {
-		const url = URL.createObjectURL(new Blob([JSON.stringify({ format: "webstation-conversation", version: 1, project: activeProject, turns }, null, 2)],
+		const url = URL.createObjectURL(new Blob([ConversationStore.export(activeProject, turns)],
 			{ type: "application/json" }));
 		const link = document.createElement("a"); link.href = url; link.download = "conversation.json"; link.click();
 		setTimeout(() => URL.revokeObjectURL(url), 30000);
@@ -117,7 +107,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 	const maxAttachmentBytes = 96 * 1024;
 	const maxAttachmentPayload = 120000;
 	const hasImageAttachments = files => files?.some(file => file.imageUrl);
-	const supportsImages = config => Boolean(config && llmClient.supportsImages(llmClient.requestOptions(config)));
+	const supportsImages = config => Boolean(config && inferenceClient.supportsImages(llmClient.requestOptions(config)));
 	const fallbackAttachmentTypes = {
 		txt: "text/plain", md: "text/markdown", csv: "text/csv", tsv: "text/tab-separated-values", log: "text/plain", jsonl: "text/plain"
 	};
@@ -129,7 +119,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 	});
 	let speechSettings;
 	let speechRequest = 0;
-	let vfs;
+	let vfs, catalog;
 	const replySpeech = createReplySpeech();
 	let speechOutputRequest = 0;
 	let activeProject;
@@ -153,8 +143,8 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 
 	let currentConfig;
 	let modelReady = false;
-	const canPrepareLocal = config => Boolean(globalThis.llmLocal && config?.chatProvider === "browser");
-	const hasModel = () => modelReady || canPrepareLocal(currentConfig);
+	let selectedModel;
+	const hasModel = () => modelReady || selectedModel?.canPrepareOnDemand;
 	let turns = [];
 	let generation;
 	let settlingReply = false;
@@ -167,7 +157,10 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 	let historyUnsaved = false;
 	let historyReadError = false;
 	let historyConflict = false;
-	const historyVersions = new Map();
+	let historyLoading = false;
+	let stopWatchingHistory;
+	let historyRequest = 0;
+	let selectionRequest = 0;
 
 	chatLog.addEventListener("click", async (event) => {
 		const button = event.target.closest(".chat-copy");
@@ -251,13 +244,13 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 	}
 
 	function updateControls() {
-		const composerBusy = Boolean(loadingAttachments) || dictation.busy;
+		const composerBusy = Boolean(loadingAttachments) || dictation.busy || historyLoading;
 		const replying = replyBusy();
 		const queued = Boolean(promptQueues.get(historyKey())?.length);
 		chatExport.disabled = !turns.length;
 		agentChoice.disabled = !vfs || replying;
 		chatEmpty.hidden = turns.length > 0;
-		chatInput.disabled = !hasModel() || !activeProject;
+		chatInput.disabled = historyLoading || !hasModel() || !activeProject;
 		const needsImageModel = hasImageAttachments(attachments) && !supportsImages(currentConfig);
 		imageModelNotice.hidden = !needsImageModel;
 		chatSend.disabled = !canSendPrompt() || composerBusy || needsImageModel ||
@@ -279,13 +272,13 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		for (const button of chatLog.querySelectorAll(".chat-retry")) {
 			button.disabled = replying || composerBusy || historyConflict || !hasModel() || !activeProject;
 		}
-		projectNew.disabled = !vfs || vfs.wasReset || replying || dictation.busy || creatingProject;
+		projectNew.disabled = historyLoading || !vfs || vfs.wasReset || replying || dictation.busy || creatingProject;
 		for (const [path, button] of projectRows) {
-			button.disabled = replying || dictation.busy || creatingProject;
+			button.disabled = historyLoading || replying || dictation.busy || creatingProject;
 			if (path === activeProject) button.setAttribute("aria-current", "true");
 			else button.removeAttribute("aria-current");
 		}
-		importPrevious.hidden = historyReadError || historyConflict || !activeProject || Boolean(turns.length) || !previousConversation.length;
+		importPrevious.hidden = historyLoading || historyReadError || historyConflict || !activeProject || Boolean(turns.length) || !previousConversation.length;
 		document.getElementById("chat-empty-title").textContent = activeProject ? "Build your app by talking to it." : "Choose a project";
 		document.getElementById("chat-empty-description").textContent = activeProject
 			? "Say what you want to change, and Chat will update the project files."
@@ -305,18 +298,13 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		}
 	});
 
-	function inferenceScope(config) {
-		return config?.chatProvider === "browser" ? "browser" : config?.apihost;
-	}
-
 	function historyKey() {
-		if (!currentConfig || !activeProject) return;
-		return `webstation.chat.project.v1:${JSON.stringify([inferenceScope(currentConfig), activeProject])}`;
+		return ConversationStore.key(currentConfig, activeProject);
 	}
 
 	function canSendPrompt() {
 		return pageActive && !vfs?.wasReset && !isWorkspaceRecovering() && hasModel() && Boolean(activeProject) &&
-			!historyReadError && !historyConflict;
+			!historyLoading && !historyReadError && !historyConflict;
 	}
 
 	let previewButton, previewTimer, previewPinned;
@@ -724,28 +712,34 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		chatStorage.hidden = !message;
 	}
 
-	function persistHistory() {
+	function reportHistoryConflict() {
+		historyUnsaved = true;
+		historyConflict = true;
+		generation?.abort(new DOMException("Conversation changed in another page.", "AbortError"));
+		showStorageNote("This conversation changed in another page. Export this tab's conversation before reloading. The saved version was preserved.");
+		updateControls();
+	}
+
+	function reportSaveError(error) {
+		if (error?.code === "EEXIST") return reportHistoryConflict();
+		historyUnsaved = true;
+		showStorageNote("This browser could not save the conversation.");
+		updateControls();
+	}
+
+	async function persistHistory() {
 		clearTimeout(historySaveTimer);
 		historySaveTimer = undefined;
-		if (vfs?.wasReset || isWorkspaceRecovering() || historyReadError || historyConflict) return;
 		const key = historyKey();
-		if (!key) return;
+		if (!key || vfs?.wasReset || isWorkspaceRecovering() || historyLoading || historyReadError || historyConflict) return;
 		try {
-			const current = historyStorage.getItem(key);
-			if (!historyVersions.has(key) || current !== historyVersions.get(key)) {
-				historyConflict = true; historyUnsaved = true;
-				showStorageNote("This conversation changed in another page. Export this tab's conversation before reloading; the saved version was preserved.");
-				generation?.abort(new DOMException("Conversation changed in another page.", "AbortError")); updateControls(); return;
+			await conversations.save(key, turns, { ifChanged: true });
+			if (key === historyKey() && !historyConflict && !historyReadError) {
+				historyUnsaved = false;
+				showStorageNote("");
 			}
-			const serialized = JSON.stringify(turns);
-			const saved = serialized !== current ? historyStorage.setItem(key, serialized) : undefined;
-			historyVersions.set(key, serialized);
-			historyUnsaved = false;
-			showStorageNote("");
-			return saved;
-		} catch {
-			historyUnsaved = true;
-			showStorageNote("This browser could not save the conversation.");
+		} catch (error) {
+			if (key === historyKey()) reportSaveError(error);
 		}
 	}
 
@@ -753,51 +747,40 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		if (historySaveTimer === undefined) historySaveTimer = setTimeout(persistHistory, 800);
 	}
 
-	function settleDraft(turn) {
-		if (turn.draft) turn.messages.push({ role: "assistant", content: turn.draft });
-		turn.draft = "";
-	}
-
-	function readSavedHistory(key) {
-		const source = key ? historyStorage.getItem(key) : null;
-		if (key) historyVersions.set(key, source);
-		const saved = JSON.parse(source || "[]");
-		const message = item => item && (item.role === "assistant" ?
-			(item.content === undefined || item.content === null || typeof item.content === "string") &&
-			(item.tool_calls == null || (Array.isArray(item.tool_calls) && item.tool_calls.every(call =>
-				typeof call?.id === "string" && typeof call.function?.name === "string" && typeof call.function.arguments === "string"))) :
-			(item.role === "tool" && typeof item.tool_call_id === "string" || item.role === "function" && typeof item.name === "string") &&
-			typeof item.content === "string");
-		const validAttachment = file => typeof file?.name === "string" && typeof file.mimeType === "string" &&
-			(file.imageUrl !== undefined ? documentAttachments.isImageURL(file.imageUrl, file.mimeType) &&
-				(file.followUpId === undefined || (typeof file.followUpId === "string" && /^[a-f0-9]{32}$/.test(file.followUpId))) :
-				typeof file.text === "string" && (file.mimeType.startsWith("text/") ||
-					file.mimeType.startsWith("audio/") || documentAttachments.findFormat(file.mimeType)));
-		if (!Array.isArray(saved) || saved.some(turn => typeof turn?.prompt !== "string" || !Array.isArray(turn.messages) ||
-			!turn.messages.every(message) || (turn.draft !== undefined && typeof turn.draft !== "string") ||
-			(turn.note !== undefined && typeof turn.note !== "string") ||
-			(turn.attachments !== undefined && (!Array.isArray(turn.attachments) || !turn.attachments.every(validAttachment))))) {
-			throw new Error("Invalid saved conversation.");
-		}
-		return saved.map((turn) => {
-			if (turn.state === "streaming") {
-				settleDraft(turn);
-				turn.state = "stopped";
-				turn.note = "Generation interrupted.";
+	async function restoreHistory() {
+		const key = historyKey();
+		const request = ++historyRequest;
+		stopWatchingHistory?.();
+		stopWatchingHistory = key && conversations.watch(key, async () => {
+			if (key !== historyKey() || isWorkspaceRecovering() || vfs?.wasReset) return;
+			if (replyBusy() || historyUnsaved || chatNewDialog.open || conversations.pending) {
+				reportHistoryConflict();
+			} else {
+				replySpeech.stop();
+				await restoreHistory();
+				followLatest();
 			}
-			return turn;
 		});
-	}
-
-	function restoreHistory() {
-		showStorageNote("");
+		historyLoading = true;
 		historyReadError = false; historyConflict = false; historyUnsaved = false;
+		showStorageNote("");
+		turns = [];
+		renderConversation();
+		updateControls();
 		try {
-			return readSavedHistory(historyKey());
+			const saved = key ? await conversations.read(key) : [];
+			if (request === historyRequest && key === historyKey()) turns = saved;
 		} catch {
-			historyReadError = true;
-			showStorageNote("The saved conversation is invalid and has been preserved. Download a workspace backup or choose New chat to replace it.");
-			return [];
+			if (request === historyRequest && key === historyKey()) {
+				historyReadError = true;
+				showStorageNote("The saved conversation could not be read. Download a workspace backup or choose New chat to replace it.");
+			}
+		} finally {
+			if (request === historyRequest) {
+				historyLoading = false;
+				renderConversation();
+				updateControls();
+			}
 		}
 	}
 
@@ -822,7 +805,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		const details = document.createElement("details");
 		details.className = "chat-tool";
 		const summary = document.createElement("summary");
-		const name = agentToolName(call?.function?.name);
+		const name = WorkstationToolRegistry.normalizeName(call?.function?.name);
 		summary.textContent = name === "webfetch" ? "Web fetch" :
 			name === "read_attachments" ? "Read attachments" : name?.replaceAll("_", " ") || "Tool result";
 		details.append(summary);
@@ -972,12 +955,13 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		pageSettings.save("chat", { project: path });
 	}
 
-	function selectProject(path, remember = true) {
+	async function selectProject(path, remember = true) {
 		if (generation || dictation.busy) return;
 		if (path === activeProject) { if (remember && path) rememberProject(path); return; }
+		const request = ++selectionRequest;
 		rememberDraft();
-		persistHistory();
-		if (historyUnsaved) return;
+		await persistHistory();
+		if (request !== selectionRequest || historyUnsaved || generation || dictation.busy || vfs?.wasReset) return;
 		replySpeech.stop();
 		loadingAttachments?.abort();
 		activeProject = path;
@@ -985,8 +969,8 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 			activeTask = undefined;
 			document.getElementById("chat-task").hidden = true;
 		}
-		turns = restoreHistory();
-		renderConversation();
+		await restoreHistory();
+		if (request !== selectionRequest || path !== activeProject) return;
 		projectPath.textContent = path || "Choose a project";
 		projectPath.title = path || "";
 		restoreDraft();
@@ -1000,16 +984,12 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		const request = ++projectRequest;
 		try {
 			const scratchpad = !projectsRoot && !isWorkspaceRecovering()
-				? await createVfsApp(vfs, "builder-scratchpad", undefined, {
+				? await catalog.create("builder-scratchpad", {
 					indexHtml: "<html>\n<head>\n<title>Scratchpad</title>\n</head>\n<body>\n</body>\n</html>\n",
 					reuseMatching: true
 				})
 				: undefined;
-			const entries = await vfs.ls(projectsRoot || "/");
-			const paths = projectsRoot
-				? [projectsRoot, ...new Set(entries.filter(entry => entry.includes("/"))
-					.map(entry => projectsRoot + entry.split("/")[0] + "/"))]
-				: findVfsProjects(entries);
+			const paths = projectsRoot ? await vfs.listProjectFolders(projectsRoot) : await catalog.listPaths();
 			if (request !== projectRequest) return;
 			if (JSON.stringify(paths) !== JSON.stringify(projectPaths)) {
 				projectPaths = paths;
@@ -1046,7 +1026,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 				generation.abort(new DOMException("The selected project is no longer available.", "AbortError"));
 			} else if (!activeProject || !paths.includes(activeProject)) {
 				const fallback = paths.includes(scratchpad) ? scratchpad : paths[0];
-				selectProject(paths.includes(chatPreferences.project) ? chatPreferences.project : fallback, false);
+				await selectProject(paths.includes(chatPreferences.project) ? chatPreferences.project : fallback, false);
 			}
 			updateControls();
 		} catch (error) {
@@ -1084,13 +1064,9 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		try {
 			const config = await readLLMConfig();
 			if (request !== configRequest || generation || dictation.busy) return;
-			if (currentConfig?.chatProvider === "browser" && (config.chatProvider !== "browser" ||
-				config.chatLocalPrimary !== currentConfig.chatLocalPrimary || config.chatLocalFallback !== currentConfig.chatLocalFallback)) {
-				globalThis.llmLocal?.close();
-				modelReady = false;
-			}
-			if (inferenceScope(currentConfig) !== inferenceScope(config)) {
-				persistHistory();
+			if (ConversationStore.scope(currentConfig) !== ConversationStore.scope(config)) {
+				await persistHistory();
+				if (request !== configRequest || generation || dictation.busy) return;
 				if (historyUnsaved) throw new Error("Export this tab's unsaved conversation before changing the model endpoint.");
 				replySpeech.stop();
 				const previousKey = historyKey();
@@ -1105,24 +1081,24 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 					drafts.delete(previousKey);
 				}
 				restoreDraft();
-				turns = restoreHistory();
-				renderConversation();
+				previousConversation = [];
+				const legacy = conversations.readLegacy(config).catch(() => []);
+				await restoreHistory();
+				const previous = await legacy;
+				if (ConversationStore.scope(currentConfig) === ConversationStore.scope(config)) previousConversation = previous;
+				if (request !== configRequest) { updateControls(); return; }
 				jumpToLatest();
-				// Keep the old host-wide history intact; the user can assign a copy to a project.
-				try { previousConversation = config.chatProvider === "browser" ? [] :
-					readSavedHistory(`webstation.chat.v1:${config.apihost}`); }
-				catch { previousConversation = []; }
 			} else {
 				currentConfig = config;
 			}
-			const options = llmClient.requestOptions(config);
-			const prepareInBackground = canPrepareLocal(config);
-			if (prepareInBackground) {
+			selectedModel = inferenceClient.selectModel(config);
+			modelReady = false;
+			if (selectedModel.canPrepareOnDemand) {
 				chatModel.parentElement.hidden = false;
 				chatModelWarning.hidden = true;
 				updateControls();
 			} else showModelPreparation();
-			const check = inferenceClient.modelStatus(options, {
+			const check = selectedModel.status({
 				onProgress(state) { if (request === configRequest) showModelPreparation(state); }
 			}).then(model => {
 				if (request !== configRequest) return;
@@ -1137,7 +1113,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 				if (!generation) showReadyStatus();
 				updateControls();
 			}).catch(unavailable);
-			if (!prepareInBackground) await check;
+			if (!selectedModel.canPrepareOnDemand) await check;
 		} catch (error) {
 			unavailable(error);
 		}
@@ -1207,16 +1183,19 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 			activeRun = await workstationStore.start({ taskId: turn.taskId, project, profile: profile.id, prompt: turn.prompt });
 			const fence = workstationStore.fence(activeRun.id);
 			const textAttachments = turn.attachments?.filter(file => !file.imageUrl);
-			const client = createLLM({ attachments: textAttachments, skillsVfs: vfs,
-				readApiKey: apiKey === undefined ? undefined : () => apiKey,
+			const client = llmClient.create({
+				readApiKey: apiKey === undefined ? readLLMApiKey : () => apiKey,
+				normalizeMessages: WorkstationToolRegistry.normalizeMessages
+			});
+			const registry = new WorkstationToolRegistry({ attachments: textAttachments, skillsVfs: vfs, profile,
 				vfs: context => createProjectVfs(vfs, project, { guard: { ...fence, signal: context.signal } }),
-				browser: browserClient, mcp });
-			const tools = agentToolsForProfile(client.listTools(settings.toolDescriptions), profile, browserAvailable);
+				browser: browserAvailable ? browserClient : undefined, mcp });
+			const tools = registry.listTools(settings.toolDescriptions);
 			if (textAttachments?.length) {
 				// Seed the tool exchange before the loop sends its first model request.
 				const call = { id: "call_" + crypto.randomUUID().replaceAll("-", ""), type: "function",
 					function: { name: "read_attachments", arguments: "{}" } };
-				const files = await client.runTool(call, { signal });
+				const files = await registry.runTool(call, { signal });
 				signal.throwIfAborted();
 				const result = { role: "tool", tool_call_id: call.id, content: JSON.stringify(files) };
 				turn.messages.push({ role: "assistant", content: "", tool_calls: [call] }, result);
@@ -1228,12 +1207,12 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 					generation?.abort(new DOMException(error.message, "AbortError"));
 				});
 			}, 15000);
-			await runAgent({ client, config, messages: buildContext(config, turn, project, profile, mcp?.tools.length), tools,
+			await runAgent({ client, registry, config, messages: buildContext(config, turn, project, profile, mcp?.tools.length), tools,
 				refreshTools: mcp?.tools.length ? mcp.filterTools : undefined,
 				maxToolCalls: settings.maxToolCalls, signal, context: { id: activeRun.id, project, profile: profile.name, fence },
 				onRound() {
 					round = appendRound(view.replies);
-					view.note.textContent = config.chatProvider === "browser" ? "Loading reply…" :
+					view.note.textContent = selectedModel.canPrepareOnDemand ? "Loading reply…" :
 						config.thinking === false ? "Waiting for reply…" : "Thinking…";
 					setStatus("Generating…"); followLatest();
 				},
@@ -1289,7 +1268,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		} catch (error) {
 			paintDraft();
 			if (!turn.draft) round?.remove();
-			settleDraft(turn);
+			ConversationStore.settleDraft(turn);
 			turn.state = signal.aborted ? "stopped" : "error";
 			turn.note = signal.aborted ? signal.reason.message : error?.message || "The request failed.";
 		} finally {
@@ -1313,7 +1292,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 	async function startReply(turn, view) {
 		const key = historyKey();
 		const controller = generation = new AbortController();
-		if (currentConfig.chatProvider === "browser") {
+		if (selectedModel.canPrepareOnDemand) {
 			view.note.textContent = "Loading reply…";
 			chatModelWarning.hidden = true;
 		}
@@ -1440,15 +1419,30 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		updateControls();
 	});
 
+	let clearKey;
 	chatNew.addEventListener("click", () => {
+		clearKey = historyKey();
 		chatNewDialog.returnValue = "";
 		chatNewDialog.showModal();
 	});
-	chatNewDialog.addEventListener("close", () => {
+	chatNewDialog.addEventListener("close", async () => {
 		if (chatNewDialog.returnValue !== "clear" || chatNew.disabled) return;
 		replySpeech.stop();
-		historyReadError = false; historyConflict = false;
-		try { historyVersions.set(historyKey(), historyStorage.getItem(historyKey())); } catch {}
+		const key = historyKey();
+		if (!key || key !== clearKey) return;
+		historyLoading = true;
+		updateControls();
+		try {
+			await conversations.clear(key);
+		} catch (error) {
+			if (key === historyKey()) reportSaveError(error);
+			return;
+		} finally {
+			if (key === historyKey()) { historyLoading = false; updateControls(); }
+		}
+		if (key !== historyKey()) return;
+		historyReadError = false; historyConflict = false; historyUnsaved = false;
+		showStorageNote("");
 		turns = [];
 		chatLog.replaceChildren();
 		chatInput.value = "";
@@ -1458,7 +1452,6 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		setAttachmentStatus("");
 		renderPendingAttachments();
 		resizeComposer();
-		persistHistory();
 		jumpToLatest();
 		showReadyStatus();
 	});
@@ -1477,10 +1470,10 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 	}).observe(chat);
 	showProjects(!narrow);
 
-	projectList.addEventListener("click", (event) => {
+	projectList.addEventListener("click", async (event) => {
 		const path = event.target.closest("button[data-project-path]")?.dataset.projectPath;
 		if (!path || replyBusy() || dictation.busy || creatingProject) return;
-		selectProject(path);
+		await selectProject(path);
 		if (narrow) {
 			showProjects(false, true);
 			if (chatInput.disabled) projectToggle.focus();
@@ -1515,9 +1508,9 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		updateControls();
 		try {
 			// The VFS chooses an unused name and creates the complete project atomically.
-			const path = projectsRoot ? await vfs.createFolder(name, projectsRoot) : await createVfsApp(vfs, name);
+			const path = projectsRoot ? await vfs.createFolder(name, projectsRoot) : await catalog.create(name);
 			await refreshProjects();
-			selectProject(path);
+			await selectProject(path);
 			projectDialog.close();
 			if (narrow) showProjects(false, true);
 		} catch (error) {
@@ -1575,7 +1568,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 		})()]);
 	}
 	window.addEventListener("focus", refreshChat);
-	window.addEventListener("susi-primary-model-retry", () => {
+	inferenceClient.onModelStatusChange(() => {
 		if (generation) refreshModelAfterReply = true;
 		else if (!document.hidden) void refreshChat();
 	});
@@ -1596,7 +1589,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 	});
 	window.addEventListener("beforeunload", event => {
 		persistHistory();
-		if ((historyUnsaved || historyStore?.pending) && !vfs?.wasReset && !isWorkspaceRecovering()) {
+		if ((historyUnsaved || conversations.pending) && !vfs?.wasReset && !isWorkspaceRecovering()) {
 			event.preventDefault(); event.returnValue = "";
 		}
 	});
@@ -1641,25 +1634,12 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 			dictation.close();
 			generation?.abort(new DOMException("Workspace recovery started in another page.", "AbortError"));
 		}
-		if (!historyStore && event.key === historyKey() && event.newValue !== historyVersions.get(event.key) && !isWorkspaceRecovering()) {
-			if (replyBusy() || historyUnsaved) {
-				historyConflict = true; historyUnsaved = true;
-				generation?.abort(new DOMException("Conversation changed in another page.", "AbortError"));
-				showStorageNote("This conversation changed in another page. Export this tab's conversation before reloading; the saved version was preserved.");
-			} else {
-				replySpeech.stop();
-				turns = restoreHistory();
-				renderConversation();
-				followLatest();
-			}
-			updateControls();
-		}
 	});
 
 	(async () => {
 		try {
 			const legacy = {};
-			if (!historyStore) try {
+			if (!conversationStore) try {
 				const project = localStorage.getItem("webstation.chat.active-project.v1");
 				const profile = localStorage.getItem("webstation.agent-profile");
 				if (isVfsPreviewFolder(project)) legacy.project = project;
@@ -1671,16 +1651,17 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 			}
 			restoreProjectSidebar();
 			vfs = await window.vfsReady;
-			workstationStore = createWorkstationStore(vfs);
+			if (!projectsRoot) catalog = new ProjectCatalog(vfs);
+			workstationStore = new WorkspaceRunStore(vfs);
 			await refreshChat();
 			const params = new URLSearchParams(location.search);
 			const requested = params.get("project");
-			if (projectPaths.includes(requested)) selectProject(requested);
+			if (projectPaths.includes(requested)) await selectProject(requested);
 			if (params.has("task")) {
 				const state = await workstationStore.read();
 				const task = state.tasks.find(item => item.id === params.get("task"));
 				if (!task || !projectPaths.includes(task.project)) throw new Error("This task or its project is unavailable.");
-				selectProject(task.project); activeTask = task; agentChoice.value = task.profile;
+				await selectProject(task.project); activeTask = task; agentChoice.value = task.profile;
 				chatInput.value = task.prompt; resizeComposer();
 				document.getElementById("chat-task").textContent = `Task: ${task.title} · Review the instructions and send to start.`;
 				document.getElementById("chat-task").hidden = false;
@@ -1716,7 +1697,7 @@ function mountSusiChat({ historyStore, modelHref = "models.html", readApiKey,
 			<button id="chat-project-toggle" type="button" aria-expanded="true" aria-controls="chat-projects">Projects</button>
 			<span id="chat-project-path">No project selected</span>
 			<label class="chat-label" for="chat-agent">Agent profile</label>
-			<select id="chat-agent" aria-label="Agent profile">
+			<select id="chat-agent" aria-label="Agent profile" data-fit-options>
 				<option value="builder">Builder</option><option value="planner">Planner</option>
 				<option value="reviewer">Reviewer</option><option value="browser">Browser operator</option>
 			</select>

@@ -5,10 +5,11 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="color-scheme" content="dark" />
 		<title>SUSI Builder Models</title>
-		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
-		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
-		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
-		<link rel="stylesheet" href="css/chat-model-settings.css?v=add78dbf" />
+		<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css" />
+		<link rel="stylesheet" href="css/select.css" />
+		<link rel="stylesheet" href="css/chat-model-settings.css" />
 		<style>
 			:is(#speech-form, #speech-output-form) > fieldset {
 				min-inline-size: 0;
@@ -16,16 +17,18 @@
 				border: 1px solid var(--color-border);
 				border-radius: var(--radius);
 			}
-			:is(#speech-status, #speech-output-status)[data-error] { color: var(--color-accent-detail); }
+			#studio-prompt-form { margin-block-start: var(--panel-padding); padding-block-start: var(--panel-padding); border-top: 1px solid var(--color-line); }
+			:is(#speech-status, #speech-output-status, #chat-prompt-status, #studio-prompt-status)[data-error] { color: var(--color-accent-detail); }
 			:is(#speech-progress, #speech-output-progress) { width: 100%; accent-color: var(--color-primary); }
 		</style>
-		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+		<script defer src="js/select-picker.js"></script>
+		<script defer src="js/navigation-frame.js"></script>
 	</head>
 	<body>
 		<iframe id="site-menu" title="Pages" src="navigation.html#models"></iframe>
 		<header>
 			<h1>Models</h1>
-			<p>Configure the Chat model, speech recognition, and spoken replies.</p>
+			<p>Configure the chat model, system prompts, speech recognition, and spoken replies.</p>
 		</header>
 
 		<div id="layout">
@@ -33,6 +36,33 @@
 				<section aria-labelledby="chat-model-title">
 					<h2 id="chat-model-title">Chat model</h2>
 					<div id="chat-model-settings"></div>
+				</section>
+				<section id="system-prompts" aria-labelledby="system-prompts-title">
+					<h2 id="system-prompts-title">System prompts</h2>
+					<form id="chat-prompt-form" aria-labelledby="chat-prompt-title">
+						<h3 id="chat-prompt-title">Chat</h3>
+						<label for="systemprompt">Chat system prompt</label>
+						<textarea id="systemprompt" rows="4" disabled></textarea>
+						<div class="model-actions">
+							<button type="submit" disabled>Save prompt</button>
+							<button type="button" id="chat-prompt-default" disabled>Restore default</button>
+							<span id="chat-prompt-status" role="status"></span>
+						</div>
+					</form>
+					<form id="studio-prompt-form" aria-labelledby="studio-prompt-title">
+						<h3 id="studio-prompt-title"><span id="studio-prompt-settings">Code Studio</span></h3>
+						<label for="studio-system-prompt">File chat system prompt</label>
+						<p id="studio-prompt-help">Use <code>&lt;file&gt;</code> for the full path of the open file.</p>
+						<textarea id="studio-system-prompt" rows="4" aria-describedby="studio-prompt-help" required disabled></textarea>
+						<label for="studio-marked-prompt">Selected text instructions</label>
+						<p id="studio-marked-help">Appended when text is selected in the editor. <code>&lt;marked&gt;</code> inserts the selection as a fenced quote.</p>
+						<textarea id="studio-marked-prompt" rows="6" aria-describedby="studio-marked-help" required disabled></textarea>
+						<div class="model-actions">
+							<button type="submit" disabled>Save prompts</button>
+							<button type="button" id="studio-prompt-default" disabled>Restore defaults</button>
+							<span id="studio-prompt-status" role="status"></span>
+						</div>
+					</form>
 				</section>
 				<section id="speech-to-text" aria-labelledby="speech-title">
 					<h2 id="speech-title"><img src="icons/device-audio-input-microphone.svg" alt="" /> Speech to text</h2>
@@ -180,22 +210,22 @@
 			</main>
 		</div>
 
-		<script src="js/llm-client.js?v=cead3d4b"></script>
-		<script src="js/skills.js?v=c42ccf4f"></script>
-		<script src="js/file-search.js?v=80072ff5"></script>
-		<script src="js/webfetch.js?v=c50d56e3"></script>
-		<script src="js/llm.js?v=1d26062a"></script>
-		<script src="js/vfs.js?v=a4b76514"></script>
-		<script src="js/page-settings.js?v=60de7c53"></script>
-		<script src="js/transformer-model-assets.js?v=9de616b6"></script>
-		<script src="js/llm-local.js?v=6b65aa7a"></script>
-		<script src="js/stt.js?v=91cb9caf"></script>
-		<script src="js/tts.js?v=123a3be2"></script>
-		<script src="js/chat-model-settings.js?v=d96d9655"></script>
-		<script src="js/models.js?v=3d2fd9e5"></script>
+		<script src="js/workspace-config-store.js"></script>
+		<script src="js/llm-client.js"></script>
+		<script src="js/model-progress.js"></script>
+		<script src="js/llm.js"></script>
+		<script src="js/vfs.js" data-vfs-workspace></script>
+		<script src="js/page-settings.js"></script>
+		<script src="js/transformer-model-assets.js"></script>
+		<script src="js/llm-local.js"></script>
+		<script src="js/stt.js"></script>
+		<script src="js/tts.js"></script>
+		<script src="js/chat-model-settings.js"></script>
+		<script src="js/studio-file-chat.js"></script>
+		<script src="js/models.js"></script>
 		<script>
 			mountChatModelSettings(document.getElementById("chat-model-settings"), {
-				readConfig: readLLMConfig, writeConfig: writeLLMConfig, readKey: readLLMApiKey, writeKey: writeLLMApiKey
+				includeSystemPrompt: false, readConfig: readLLMConfig, writeConfig: writeLLMConfig, readKey: readLLMApiKey, writeKey: writeLLMApiKey
 			});
 		</script>
 	</body>

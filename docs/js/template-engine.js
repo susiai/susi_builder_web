@@ -24,11 +24,18 @@ const templateEngine = (() => {
 		return { level: [...level], sprite: [...sprite] };
 	}
 
+	function libraryPackages(ids) {
+		const selected = new Set(ids);
+		const chat = selected.has('chat') || selected.has('chat-workbench');
+		if (chat) selected.add('zip'); // Ship the VFS codec for offline use. The VFS loads it on demand.
+		const libraries = templateCatalog.libraries.filter(item => selected.has(item.id));
+		return chat ? [chatModelAssets, ...libraries] : libraries;
+	}
+
 	function projectPackages(settings) {
 		const packages = [templateCatalog.base, byId(templateCatalog.designs, settings.design, 'design')];
 		for (const item of blockAssets) if (item.blocks.some(id => settings.blocks.includes(id))) packages.push(item);
-		if (settings.libraries.some(id => id === 'chat' || id === 'chat-workbench')) packages.push(chatModelAssets);
-		return packages.concat(templateCatalog.libraries.filter(item => settings.libraries.includes(item.id)));
+		return packages.concat(libraryPackages(settings.libraries));
 	}
 
 	function normalize(options) {
@@ -224,7 +231,7 @@ const templateEngine = (() => {
 
 	async function create(vfs, options, reader) {
 		const project = await build(options, reader);
-		const path = await createVfsApp(vfs, project.settings.name, project.entries);
+		const path = await new ProjectCatalog(vfs).create(project.settings.name, { entries: project.entries });
 		return { ...project, path };
 	}
 
@@ -415,14 +422,14 @@ const templateEngine = (() => {
 		const firstTarget = sections[0].id === 'playfield' ? 'game-board' : sections[0].id;
 		const firstAction = { 'game-board': 'Play the game', 'data-workspace': 'Explore the data',
 			'project-notebook': 'Open notebook', 'workbench-panel': 'Open Chat Workbench' }[firstTarget] || 'Take a look';
-		const styles = ['css/base.css', design.css, 'css/app.css', ...pagePackages.flatMap(item => item.styles), ...libraries.flatMap(lib => lib.styles),
+		const styles = ['css/base.css', ...designStyles(design), 'css/app.css', ...pagePackages.flatMap(item => item.styles), ...libraries.flatMap(lib => lib.styles),
 			...(embeddedWorkbench ? ['css/chat-workbench.css', 'css/speech-dictation.css'] : [])];
-		const scripts = [...(chat || workbench ? chatModelAssets.scripts : []), ...libraries.flatMap(lib => lib.scripts), ...pagePackages.flatMap(item => item.scripts),
+		const scripts = [...(design.scripts || []), ...(chat || workbench ? chatModelAssets.scripts : []), ...libraries.flatMap(lib => lib.scripts), ...pagePackages.flatMap(item => item.scripts),
 			...(has('matter') ? ['js/physics.js'] : []), 'js/app.js',
 			...(embeddedWorkbench ? ['js/susi-chat.js', 'js/workbench-start.js'] : [])];
 		return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n' +
 			'<meta name="viewport" content="width=device-width, initial-scale=1" />\n' +
-			`<title>${escapeHTML(settings.name)}</title>\n` + styles.map(path => `<link rel="stylesheet" href="${path}" />`).join('\n') +
+			`<title>${escapeHTML(settings.name)}</title>\n` + styleTags(styles) +
 			'\n</head>\n' + `<body data-layout="${settings.layout}" data-purpose="${settings.purpose}"${settings.appId ? ` data-app-id="${settings.appId}"` : ''}>\n<nav class="project-nav" aria-label="Sections"><strong>${escapeHTML(settings.name)}</strong>` +
 			`<ul>${chatPurpose ? '' : sections.filter(section => section.id !== 'workbench-panel').slice(0, 3).map(sectionLink).join('')}${chat ? '<li><a href="config.html">Configuration</a></li>' : ''}` +
 			(workbench ? `<li><a href="${embeddedWorkbench ? '#workbench-panel' : 'agent-chat.html'}">Chat Workbench</a></li>` : '') + '</ul></nav>\n' +
@@ -440,6 +447,14 @@ const templateEngine = (() => {
 			'\n</body>\n</html>\n';
 	}
 
+	function designStyles(design) {
+		return [design.css, ...(design.styles || [])];
+	}
+
+	function styleTags(paths) {
+		return paths.map(path => `<link rel="stylesheet" href="${path}" />`).join('\n');
+	}
+
 	function scriptTags(paths) {
 		return paths.map(path => `<script defer src="${path}"${['js/vfs.js', 'js/susi-chat.js'].includes(path) ? ' data-vfs-standalone' : ''}></script>`)
 			.join('\n');
@@ -453,10 +468,10 @@ const templateEngine = (() => {
 	<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
 	<title>Chat · ${escapeHTML(name)}</title>
 	<link rel="stylesheet" href="css/base.css" />
-	<link rel="stylesheet" href="${design.css}" />
+	${styleTags(designStyles(design))}
 	<link rel="stylesheet" href="css/chat-workbench.css" />
 	<link rel="stylesheet" href="css/speech-dictation.css" />
-	${scriptTags([...chatModelAssets.scripts, 'js/susi-chat.js', 'js/workbench-start.js'])}
+	${scriptTags([...(design.scripts || []), ...chatModelAssets.scripts, 'js/susi-chat.js', 'js/workbench-start.js'])}
 </head>
 <body id="chat-page" data-app-id="${appId}">
 	${showAppLink ? '<nav class="workbench-nav" aria-label="App"><a href="index.html">App home</a></nav>' : ''}
@@ -474,11 +489,11 @@ const templateEngine = (() => {
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Configuration · ${escapeHTML(name)}</title>
 	<link rel="stylesheet" href="css/base.css" />
-	<link rel="stylesheet" href="${design.css}" />
+	${styleTags(designStyles(design))}
 	<link rel="stylesheet" href="css/app.css" />
 	<link rel="stylesheet" href="css/chat.css" />
 	<link rel="stylesheet" href="css/chat-model-settings.css" />
-	${scriptTags([...chatModelAssets.scripts, workbenchPage ? 'js/susi-chat.js' : 'js/vfs.js',
+	${scriptTags([...(design.scripts || []), ...chatModelAssets.scripts, workbenchPage ? 'js/susi-chat.js' : 'js/vfs.js',
 		'js/chat-model-settings.js', 'js/chat.js'])}
 </head>
 <body data-purpose="chat" data-app-id="${appId}"${workbenchPage ? ' data-chat-workspace' : ''}>
@@ -776,5 +791,5 @@ const templateEngine = (() => {
 		document.documentElement.dataset.templateReady = 'true';
 	}
 
-	return { normalize, gameData, projectPackages, build, create, packageFiles, hostedReader, localReader };
+	return { normalize, gameData, libraryPackages, projectPackages, build, create, packageFiles, hostedReader, localReader };
 })();

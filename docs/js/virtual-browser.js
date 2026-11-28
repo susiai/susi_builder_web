@@ -26,7 +26,6 @@
 
 	async function navigate(path) {
 		try {
-			llmLocal.close();
 			await preview.open(path);
 			frame.hidden = false;
 			notice.hidden = true;

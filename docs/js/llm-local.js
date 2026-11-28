@@ -794,6 +794,11 @@ globalThis.llmLocal = (() => {
 		if (key === activePairKey && (engine?.fallbackReason || preparation?.model?.device === "wasm")) retryPending = true;
 	}
 
+	function onModelStatusChange(listener) {
+		window.addEventListener("susi-primary-model-retry", listener);
+		return () => window.removeEventListener("susi-primary-model-retry", listener);
+	}
+
 	function getModelChannel() {
 		if (modelChannel === undefined) {
 			try {
@@ -1076,26 +1081,29 @@ globalThis.llmLocal = (() => {
 		} finally { if (operation === controller) operation = undefined; }
 	}
 
-	window.addEventListener("pagehide", () => {
-		close();
-		modelChannel?.close();
-		modelChannel = undefined;
-	});
-	window.addEventListener("vfs-reset", close);
 	const preview = window.susi?.localModel;
 	if (preview) {
 		// The preview is sandboxed. Its host runs the same worker against the host's model cache.
-		return { models, modelPaths, defaultConfig, primaryConfigKey, localConfig, modelPair, modelLabel, supportsImages,
+		const closePreview = () => { void preview("close", []).catch(() => {}); };
+		window.addEventListener("pagehide", closePreview);
+		return { models, modelPaths, defaultConfig, primaryConfigKey, localConfig, modelPair, modelLabel, supportsImages, onModelStatusChange,
 			status: (options, { signal, onProgress } = {}) =>
 				preview("status", [options], signal, (name, value) => { if (name === "progress") onProgress?.(value); }),
 			generate: ({ signal, onToken, onStatus, onProgress, onRestart, ...options }) => {
 				const handlers = { token: onToken, status: onStatus, progress: onProgress, restart: onRestart };
 				return preview("generate", [options, Boolean(onRestart)], signal, (name, value) => handlers[name]?.(value));
 			},
-			close: () => { void preview("close", []).catch(() => {}); },
+			close: closePreview,
 			requestPrimaryRetry: (primary, fallback) => { void preview("retry", [primary, fallback]).catch(() => {}); }
 		};
 	}
+
+	window.addEventListener("pagehide", () => {
+		close();
+		modelChannel?.close();
+		modelChannel = undefined;
+	});
+	window.addEventListener("vfs-reset", close);
 
 	function previewRequest(method, args, signal, emit) {
 		switch (method) {
@@ -1118,6 +1126,6 @@ globalThis.llmLocal = (() => {
 		}
 	}
 
-	return { models, modelPaths, defaultConfig, primaryConfigKey, localConfig, modelPair, modelLabel, supportsImages,
+	return { models, modelPaths, defaultConfig, primaryConfigKey, localConfig, modelPair, modelLabel, supportsImages, onModelStatusChange,
 		status, download, generate, close, requestPrimaryRetry, previewRequest };
 })();

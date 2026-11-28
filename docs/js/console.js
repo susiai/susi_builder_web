@@ -149,6 +149,12 @@
   const readline = new XtermReadline.Readline();
   readline.setCompletionHandler((line, cursor) => fs ? completeVfsPath(fs, cwd, env.HOME, line, cursor) : '');
   terminal.loadAddon(readline);
+  const chat = mountConsoleChat({
+    terminal, output,
+    getWorkingDirectory: () => cwd,
+    // Bracketed paste inserts one literal edit at the cursor, including embedded newlines.
+    insertDraft: text => readline.readData('\x1b[200~' + text + '\x1b[201~')
+  });
 
   // Opening IndexedDB can wait on another tab. It must not prevent attaching the input or drawing the prompt.
   const storageWarning = setTimeout(() => {
@@ -242,14 +248,19 @@
       try { if (susiConsoleHistory.read().length) return; } catch { /* Only in-memory history is accessible. */ }
     }
     clearing = true;
+    chat.setReady(false);
     cancel();
     window.location.reload();
   });
-  window.addEventListener('pagehide', cancel);
+  window.addEventListener('pagehide', () => {
+    chat.setReady(false);
+    cancel();
+  });
   window.addEventListener('pageshow', event => { if (event.persisted) window.location.reload(); });
   window.addEventListener('vfs-reset', event => {
     if (!event.detail?.cleared) return;
     clearing = true;
+    chat.setReady(false);
     cancel();
     terminal.reset();
     statusMessage.textContent = 'Workspace cleared. Reload to start a fresh workspace.';
@@ -344,7 +355,10 @@
   while (!clearing) {
     // Enable bracketed paste so pasted line breaks stay in the draft.
     terminal.write('\x1b[0m\x1b[?25h\x1b[?2004h');
-    const command = await readline.read(prompt(cwd));
+    const line = readline.read(prompt(cwd));
+    chat.setReady(true);
+    const command = await line;
+    chat.setReady(false);
     if (!clearing && command.trim()) await execute(command);
   }
 })().catch(error => {

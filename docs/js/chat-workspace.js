@@ -14,6 +14,15 @@ function createChatWorkspaceAccess(vfs, root, projects = root + "Projects/") {
 	function writeOptions(fence, signal) {
 		return fence ? { guard: { path: resolve(fence.path), owner: fence.owner, runId: fence.runId, signal } } : {};
 	}
+	function compareText(previous, value) {
+		if ((previous !== undefined && typeof previous !== "string") || typeof value !== "string") {
+			throw new Error("Chat settings and records must be text.");
+		}
+		return latest => {
+			if (latest !== previous) throw Object.assign(new Error("The app file changed in another page."), { code: "EEXIST" });
+			return value;
+		};
+	}
 	function runScript(runtime, signal, folder, script, fence) {
 		if (!isVfsPreviewFolder(folder) || !folder.startsWith("/Projects/") || folder === "/Projects/") {
 			throw new Error("Choose an app project folder to run the script.");
@@ -34,6 +43,7 @@ function createChatWorkspaceAccess(vfs, root, projects = root + "Projects/") {
 		stat: (_signal, path) => vfs.fileSystem.stat(resolve(path)),
 		readdir: (_signal, path) => vfs.fileSystem.readdir(resolve(path)),
 		readFile: (_signal, path) => vfs.fileSystem.readFile(resolve(path)),
+		checkRun: (signal, fence) => vfs.checkRun(writeOptions(fence, signal).guard),
 		runPython: (signal, folder, script, fence) => runScript(susiPython, signal, folder, script, fence),
 		runJavaScript: (signal, folder, script, fence) => runScript(susiJavaScript, signal, folder, script, fence),
 		put: (signal, path, value, fence) => vfs.put(resolve(path), value, writeOptions(fence, signal)),
@@ -44,15 +54,12 @@ function createChatWorkspaceAccess(vfs, root, projects = root + "Projects/") {
 		mkdir: (_signal, path) => vfs.fileSystem.mkdir(resolve(path), { recursive: true }),
 		create: (_signal, name, parent) => createFolder(name, parent, [{ path: "index.html", value: "" }]),
 		createFolder: (_signal, name, parent) => createFolder(name, parent, []),
-		replace: (signal, path, previous, value, fence) => {
-			if ((previous !== undefined && typeof previous !== "string") || typeof value !== "string") {
-				throw new Error("Chat settings and records must be text.");
-			}
-			return vfs.update(resolve(path), latest => {
-				if (latest !== previous) throw Object.assign(new Error("The app file changed in another page."), { code: "EEXIST" });
-				return value;
-			}, writeOptions(fence, signal));
-		}
+		replace: (signal, path, previous, value, fence) =>
+			vfs.update(resolve(path), compareText(previous, value), writeOptions(fence, signal)),
+		replacePair: (signal, path, previous, value, file, fence) =>
+			vfs.fileSystem.updateWithFile(resolve(path), compareText(previous, value), {
+				action: "update", path: resolve(file.path), update: compareText(file.previous, file.value)
+			}, writeOptions(fence, signal))
 	};
 	return (name, args, signal) => {
 		if (!Object.hasOwn(methods, name) || !Array.isArray(args) || args.length !== methods[name].length - 1) {
@@ -69,14 +76,30 @@ function createChatWorkspace(call) {
 		return call(name, [...args, fence.path ? fence : null], signal);
 	};
 	const getasync = path => call("get", [path]);
+	async function previousText(path) {
+		try { return await getasync(path); }
+		catch (error) { if (error !== "Key not found" && error?.code !== "ENOENT") throw error; }
+	}
+	async function retryConflicts(operation) {
+		for (let attempt = 1; ; attempt++) {
+			try { return await operation(); }
+			catch (error) { if (error.code !== "EEXIST" || attempt === 8) throw error; }
+		}
+	}
 	return {
 		getasync,
+		checkRun: guard => invoke("checkRun", [], { guard }),
 		runPython: (folder, script, { guard, signal } = {}) =>
 			invoke("runPython", [folder, script], { guard: { ...guard, signal } }),
 		runJavaScript: (folder, script, { guard, signal } = {}) =>
 			invoke("runJavaScript", [folder, script], { guard: { ...guard, signal } }),
 		baseName: path => path.replace(/\/$/, "").split("/").at(-1),
 		ls: path => call("list", [path]),
+		async listProjectFolders(root) {
+			const entries = await call("list", [root]);
+			const folders = entries.filter(path => path.includes("/")).map(path => root + path.split("/")[0] + "/");
+			return [root, ...new Set(folders)];
+		},
 		mkdir: path => call("mkdir", [path]),
 		createFolder: (name, parent) => call("createFolder", [name, parent]),
 		addFolderTree: (name, _entries, { parent } = {}) => call("create", [name, parent || "/"]),
@@ -85,18 +108,23 @@ function createChatWorkspace(call) {
 		rm: (path, options) => invoke("remove", [path], options),
 		cp: (from, to, options) => invoke("copy", [from, to], options),
 		mv: (from, to, options) => invoke("move", [from, to], options),
-		async update(path, updater, options) {
-			for (let attempt = 0; attempt < 8; attempt++) {
-				let previous;
-				try { previous = await getasync(path); }
-				catch (error) { if (error !== "Key not found") throw error; }
+		update(path, updater, options) {
+			return retryConflicts(async () => {
+				const previous = await previousText(path);
 				const value = updater(previous);
-				if (value === previous) return value;
-				try { return await invoke("replace", [path, previous, value], options); }
-				catch (error) { if (error.code !== "EEXIST" || attempt === 7) throw error; }
-			}
+				if (value === previous && !options?.guard) return value;
+				return invoke("replace", [path, previous, value], options);
+			});
 		},
 		fileSystem: {
+			async updateWithFile(path, updater, file, options) {
+				if (file.action !== "update") throw new Error("Expected a paired update of Chat records.");
+				return retryConflicts(async () => {
+					const [previous, other] = await Promise.all([previousText(path), previousText(file.path)]);
+					return invoke("replacePair", [path, previous, updater(previous),
+						{ path: file.path, previous: other, value: file.update(other) }], options);
+				});
+			},
 			resolvePath: (base, path) => {
 				const parts = [];
 				for (const part of (path.startsWith("/") ? path : base + "/" + path).split("/")) {

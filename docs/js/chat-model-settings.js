@@ -1,6 +1,6 @@
 "use strict";
 
-const CHAT_MODEL_SETTINGS_MARKUP = `
+const chatModelSettingsMarkup = includeSystemPrompt => `
 	<form id="llm-config-form">
 		<div id="models-layout">
 			<div id="chat-model-config">
@@ -23,10 +23,10 @@ const CHAT_MODEL_SETTINGS_MARKUP = `
 					</div>
 					<p id="api-key-help">Saved keys stay in this tab. Use HTTPS for remote providers.</p>
 				</fieldset>
-				<div>
+				${includeSystemPrompt ? `<div>
 					<label for="systemprompt">System prompt</label>
 					<textarea id="systemprompt" name="systemprompt" rows="4"></textarea>
-				</div>
+				</div>` : ""}
 				<div class="model-fields">
 					<div>
 						<label for="request-timeout">Idle timeout (seconds)</label>
@@ -108,14 +108,14 @@ const CHAT_MODEL_SETTINGS_MARKUP = `
 	</section>
 `;
 
-async function mountChatModelSettings(container, { readConfig, writeConfig, readKey, writeKey, demo = false } = {}) {
-	container.innerHTML = CHAT_MODEL_SETTINGS_MARKUP;
+async function mountChatModelSettings(container, { readConfig, writeConfig, readKey, writeKey, includeSystemPrompt = true, demo = false } = {}) {
+	container.innerHTML = chatModelSettingsMarkup(includeSystemPrompt);
 	const get = id => container.querySelector("#" + id);
 	function notice(element, message, error = false) {
 		if (element.textContent !== message) element.textContent = message;
 		element.toggleAttribute("data-error", error);
 	}
-	const { renderModelProgress, defaultOllamaPort } = llmClient;
+	const { defaultOllamaPort } = llmClient;
 	const form = get("llm-config-form");
 	const methods = get("chat-provider-options");
 	const method = form.elements["chat-provider"];
@@ -150,7 +150,8 @@ async function mountChatModelSettings(container, { readConfig, writeConfig, read
 
 	function readDraft() {
 		const changes = {
-			chatProvider: method.value, systemprompt: prompt.value, thinking: thinking.checked,
+			chatProvider: method.value, thinking: thinking.checked,
+			...(prompt && { systemprompt: prompt.value }),
 			requestTimeoutMs: timeout.valueAsNumber * 1000,
 			...(isBrowser() ? localSelection : { apihost: host.value, model: modelID.value.trim() })
 		};
@@ -168,7 +169,8 @@ async function mountChatModelSettings(container, { readConfig, writeConfig, read
 		const refreshLabel = showSetup ? "Check connection" : "Refresh list";
 		if (modelListTitle.textContent !== title) modelListTitle.textContent = title;
 		if (refresh.textContent !== refreshLabel) refresh.textContent = refreshLabel;
-		methods.disabled = timeout.disabled = prompt.disabled = thinking.disabled = locked;
+		methods.disabled = timeout.disabled = thinking.disabled = locked;
+		if (prompt) prompt.disabled = locked;
 		apiFields.hidden = refresh.hidden = local;
 		apiSelection.hidden = local;
 		browserHelp.hidden = !local;
@@ -409,12 +411,13 @@ async function mountChatModelSettings(container, { readConfig, writeConfig, read
 		render();
 		try {
 			const { settings, apiKey } = readDraft();
+			const systemPrompt = prompt ? settings.systemprompt : (await readConfig()).systemprompt;
 			const { chatLocalPrimary, chatLocalFallback } = settings;
 			if (local) llmLocal.requestPrimaryRetry(chatLocalPrimary, chatLocalFallback);
 			const { model, message, finishReason } = await client.streamChat({
 				...llmClient.requestOptions(settings), apiKey,
 				maxTokens: 512,
-				messages: [{ role: "system", content: settings.systemprompt }, { role: "user", content: text }],
+				messages: [{ role: "system", content: systemPrompt }, { role: "user", content: text }],
 				signal: controller.signal,
 				onStatus: stage => notice(testStatus, stage),
 				onProgress(state) {
@@ -476,7 +479,7 @@ async function mountChatModelSettings(container, { readConfig, writeConfig, read
 		key.value = host.value && !demo ? await readKey(host.value) : "";
 		modelID.value = saved.model;
 		timeout.value = (saved.requestTimeoutMs ?? 120000) / 1000;
-		prompt.value = saved.systemprompt;
+		if (prompt) prompt.value = saved.systemprompt;
 		thinking.checked = saved.thinking ?? true;
 		method.value = saved.chatProvider ?? "api";
 		localSelection = llmLocal.localConfig(saved);

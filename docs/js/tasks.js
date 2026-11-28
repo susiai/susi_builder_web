@@ -5,7 +5,7 @@
 	const status = $("tasks-status");
 	const inferenceClient = llmClient.create();
 	let store;
-	let vfs;
+	let vfs, catalog;
 	let state;
 	let projects = [];
 	let selectedRun;
@@ -163,7 +163,7 @@
 		try {
 			await store.recover();
 			[state, profiles] = await Promise.all([store.read({ events: false }), readAgentProfiles()]);
-			projects = findVfsProjects(await vfs.ls("/"));
+			projects = await catalog.listPaths();
 			const signature = JSON.stringify([projects, state.tasks, state.runs.map(({ leaseUntil, ...run }) => run)]);
 			if (signature === rendered) return;
 			rendered = signature;
@@ -180,9 +180,8 @@
 		try {
 			const config = await readLLMConfig();
 			if (disposed || request !== modelRequest) return;
-			if (config.chatProvider !== "browser") llmLocal.close();
 			renderModelProgress(loading);
-			const model = await inferenceClient.modelStatus(llmClient.requestOptions(config), {
+			const model = await inferenceClient.selectModel(config).status({
 				onProgress(state) {
 					if (disposed || request !== modelRequest) return;
 					warning.hidden = true;
@@ -275,7 +274,8 @@
 		$("tasks-show-archived").checked = settings.showArchived === true;
 		describeProfile();
 		vfs = await window.vfsReady;
-		store = createWorkstationStore(vfs);
+		catalog = new ProjectCatalog(vfs);
+		store = new WorkspaceRunStore(vfs);
 		void refreshModel();
 		await refresh();
 	}

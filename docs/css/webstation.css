@@ -57,7 +57,8 @@
 	--panel-padding: clamp(0.875rem, 2.2vw, 1.75rem);
 	--nav-height: 4rem;
 	--radius: 0.18rem;
-	--cut-corners: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+	--corner-cut: 8px;
+	--cut-corners: polygon(0 0, calc(100% - var(--corner-cut)) 0, 100% var(--corner-cut), 100% 100%, var(--corner-cut) 100%, 0 calc(100% - var(--corner-cut)));
 	--brand-monogram: "WS";
 }
 
@@ -122,7 +123,8 @@ a:hover {
 	display: block;
 	width: 100%;
 	height: calc(var(--nav-height) + var(--submenu-height, 0px));
-	margin-block-end: calc(0px - var(--submenu-height, 0px));
+	max-height: 100dvh;
+	margin-block-end: max(calc(var(--nav-height) - 100dvh), calc(0px - var(--submenu-height, 0px)));
 	border: 0;
 }
 
@@ -847,9 +849,26 @@ form > :is(input, select, textarea) {
 }
 
 input:focus,
-select:focus,
 textarea:focus {
 	border-color: var(--color-primary);
+}
+
+@media (forced-colors: none) {
+	input:where(:not([type]), [type="text"], [type="search"], [type="url"], [type="email"], [type="tel"], [type="password"], [type="number"]):focus,
+	textarea:where(:not(.ace_text-input, .xterm-helper-textarea, .chat-copy-input, #chat-input)):focus {
+		--bevel-stroke: linear-gradient(45deg, transparent 38%, var(--color-signal) 38% 62%, transparent 62%);
+		--focus-stroke: linear-gradient(var(--color-primary) 0 0);
+		outline: none;
+		border-color: var(--color-signal);
+		border-radius: 0;
+		clip-path: var(--cut-corners);
+		background-image: var(--bevel-stroke), var(--bevel-stroke), var(--focus-stroke), var(--focus-stroke);
+		background-position: top right, bottom left, top left, top left;
+		background-size: var(--corner-cut) var(--corner-cut), var(--corner-cut) var(--corner-cut), 2.4rem 3px, 3px 0.9rem;
+		background-repeat: no-repeat;
+		background-origin: border-box;
+		caret-color: var(--color-primary);
+	}
 }
 
 textarea {
@@ -1019,10 +1038,10 @@ details[open] > :not(summary) {
 }
 
 #finder-list {
-	--finder-action-size: 1.625rem;
+	--finder-action-size: 2em;
 	padding: 0.35rem;
 	color: var(--color-text);
-	font: 0.8125rem/1.35 var(--font-mono);
+	font: 0.9375rem/1.35 var(--font-mono);
 }
 
 #finder-list ul {
@@ -1038,8 +1057,8 @@ details[open] > :not(summary) {
 #finder-list li > div {
 	display: flex;
 	align-items: center;
-	gap: 0.35rem;
-	padding: 0.125rem 0.3rem;
+	gap: 0.4em;
+	padding: 0.2em 0.35em;
 	border-inline-start: 2px solid transparent;
 	border-radius: 0.25rem;
 }
@@ -1072,6 +1091,7 @@ details[open] > :not(summary) {
 	place-items: center;
 	width: var(--finder-action-size);
 	height: var(--finder-action-size);
+	font-size: inherit;
 	padding: 0;
 	border: 1px solid transparent;
 	border-radius: 0.25rem;
@@ -1093,6 +1113,11 @@ details[open] > :not(summary) {
 	color: var(--color-primary);
 }
 
+#finder-list a[data-action="play"]::before {
+	width: 0.75em;
+	height: 0.875em;
+}
+
 a[data-action="play"]::before {
 	width: 0.62rem;
 	height: 0.72rem;
@@ -1107,8 +1132,8 @@ a[data-action="play"]::before {
 }
 
 #finder-list button[data-action="toggle"]::before {
-	width: 0.4rem;
-	height: 0.4rem;
+	width: 0.5em;
+	height: 0.5em;
 	border-right: 1px solid currentColor;
 	border-bottom: 1px solid currentColor;
 	transform: rotate(-45deg);
@@ -1121,8 +1146,8 @@ a[data-action="play"]::before {
 
 #finder-list img[data-icon] {
 	flex: none;
-	width: 0.9rem;
-	height: 0.9rem;
+	width: 1.125em;
+	height: 1.125em;
 }
 
 #finder-list [data-role="name"] {
@@ -1154,7 +1179,7 @@ a[data-action="play"]::before {
 
 @media (pointer: coarse) {
 	#finder-list {
-		--finder-action-size: 1.875rem;
+		--finder-action-size: 2.3em;
 	}
 }
 

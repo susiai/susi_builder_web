@@ -452,7 +452,16 @@ html:has(#chat-page) {
 	content: var(--brand-monogram, "WS");
 }
 
-#chat-agent { width: auto; max-width: 10rem; padding: 0.25rem 1.5rem 0.25rem 0.5rem; font-size: 0.75rem; }
+#chat-agent {
+	flex: none;
+	width: 10.5rem;
+	max-width: 100%;
+	min-height: 2rem;
+	padding: 0.25rem 1.5rem 0.25rem 0.6rem;
+	font-size: 0.875rem;
+}
+#chat-agent[aria-expanded="true"] { opacity: 0; }
+
 .chat-shortcut { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.3rem 1rem; }
 #chat-export { padding: 0.15rem 0.35rem; font: inherit; color: var(--color-muted); border: 0; background: transparent; }
 #chat-task { margin: 0; padding: 0.5rem 1rem; border-bottom: 1px solid var(--color-line); color: var(--color-primary); font-size: 0.8rem; }
@@ -469,7 +478,6 @@ html:has(#chat-page) {
 }
 
 @container chat-layout (max-width: 42rem) {
-	#chat-agent { max-width: 8.5rem; }
 	#chat-project-path { flex: 1 0 calc(100% - 6rem); }
 	#chat-status { margin-inline-start: auto; }
 }

@@ -5,24 +5,37 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
 		<meta name="color-scheme" content="dark" />
 		<title>Code Studio</title>
-		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
-		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
+		<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg" type="image/svg+xml" sizes="any" />
 
-		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
-		<link rel="stylesheet" href="css/vfs-editor.css?v=8037d153" />
-		<link rel="stylesheet" href="css/code-studio.css?v=6f111d9d" />
-		<link rel="stylesheet" href="css/speech-dictation.css?v=92b87b4e" />
-		<script defer src="js/vfs.js?v=a4b76514"></script>
-		<script defer src="js/vfs-browser.js?v=6577e771"></script>
-		<script defer src="js/vendor/ace-1.45.2/ace.js?v=e1e8dc2a"></script>
-		<script defer src="js/vendor/ace-1.45.2/ext-modelist.js?v=9a44627d"></script>
-		<script defer src="js/vfs-editor.js?v=f56293f0"></script>
-		<script defer src="js/studio-state.js?v=c8cb9863"></script>
-		<script defer src="js/page-settings.js?v=60de7c53"></script>
-		<script defer src="js/transformer-model-assets.js?v=9de616b6"></script>
-		<script defer src="js/stt.js?v=91cb9caf"></script>
-		<script defer src="js/code-studio.js?v=93508d38"></script>
-		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+		<link rel="stylesheet" href="css/webstation.css" />
+		<link rel="stylesheet" href="css/select.css" />
+		<link rel="stylesheet" href="css/vfs-editor.css" />
+		<link rel="stylesheet" href="css/prompt-chat.css" />
+		<link rel="stylesheet" href="css/code-studio.css" />
+		<link rel="stylesheet" href="css/speech-dictation.css" />
+		<script defer src="js/vfs.js" data-vfs-workspace></script>
+		<script defer src="js/vfs-browser.js"></script>
+		<script defer src="js/vendor/ace-1.45.2/ace.js"></script>
+		<script defer src="js/vendor/ace-1.45.2/ext-modelist.js"></script>
+		<script defer src="js/vfs-editor.js"></script>
+		<script defer src="js/workspace-config-store.js"></script>
+		<script defer src="js/studio-state.js"></script>
+		<script defer src="js/page-settings.js"></script>
+		<script defer src="js/transformer-model-assets.js"></script>
+		<script defer src="js/stt.js"></script>
+		<script defer src="js/llm-client.js"></script>
+		<script defer src="js/llm.js"></script>
+		<script defer src="js/llm-local.js"></script>
+		<script defer src="js/tool-registry.js"></script>
+		<script defer src="js/workstation-tools.js"></script>
+		<script defer src="js/agent-runtime.js"></script>
+		<script defer src="js/agent-settings.js"></script>
+		<script defer src="js/vendor/diff-8.0.4.min.js"></script>
+		<script defer src="js/studio-file-chat.js"></script>
+		<script defer src="js/code-studio.js"></script>
+		<script defer src="js/select-picker.js"></script>
+		<script defer src="js/navigation-frame.js"></script>
 	</head>
 	<body id="studio-page">
 		<iframe id="site-menu" title="Pages" src="navigation.html#code-studio"></iframe>
@@ -45,6 +58,10 @@
 						<button type="button" id="studio-save" aria-label="Save file" title="Save (Ctrl+S / Command+S)" aria-keyshortcuts="Control+S Meta+S">
 							<img src="icons/action-document-save.svg" alt="" />
 						</button>
+						<button type="button" id="studio-chat-toggle" class="prompt-chat-toggle" aria-controls="studio-chat" aria-expanded="false"
+							aria-keyshortcuts="Control+I Meta+I" title="File chat (Ctrl+I / Command+I)" disabled>
+							<span aria-hidden="true">✦</span> Chat
+						</button>
 					</div>
 					<div id="studio-dictation-controls" hidden>
 						<button id="studio-record" type="button" aria-label="Record audio"
@@ -60,6 +77,9 @@
 					<header>
 						<div id="studio-filebar">
 							<span id="studio-path"></span>
+							<button type="button" id="studio-chat-undo" title="Restore the file to its state before the last AI edit" hidden>
+								<img src="icons/action-edit-undo.svg" alt="" /> Undo AI edit
+							</button>
 							<span id="studio-language"></span>
 						</div>
 						<div id="studio-microphone" class="dictation-microphone" hidden>
@@ -78,6 +98,17 @@
 					<div id="studio-image-preview" role="region" aria-label="Image preview" tabindex="-1" hidden>
 						<img class="vfs-image-preview" alt="" />
 					</div>
+					<form id="studio-chat" class="prompt-chat" aria-label="File chat" hidden>
+						<label for="studio-chat-prompt"><span aria-hidden="true">✦</span> File chat
+							<small id="studio-chat-selection" hidden>Selection included</small>
+						</label>
+						<button type="button" id="studio-chat-close" class="prompt-chat-close" aria-label="Close file chat" title="Close (Esc)">×</button>
+						<textarea id="studio-chat-prompt" class="prompt-chat-input" rows="2" required placeholder="Describe a change to this file…"></textarea>
+						<div id="studio-chat-actions" class="prompt-chat-actions">
+							<span id="studio-chat-status" class="prompt-chat-status" role="status"></span>
+							<button type="submit" id="studio-chat-submit" class="prompt-chat-send" disabled>Send <span aria-hidden="true">↑</span></button>
+						</div>
+					</form>
 				</div>
 				<div id="studio-empty">
 					<img src="icons/mime-text-x-generic.svg" alt="" />
@@ -86,6 +117,12 @@
 				<p id="studio-message" data-vfs-open-status role="status" hidden></p>
 			</div>
 		</main>
+		<dialog id="studio-chat-result" class="prompt-chat-result" aria-labelledby="studio-chat-result-title">
+			<h2 id="studio-chat-result-title">File chat</h2>
+			<p id="studio-chat-result-path"></p>
+			<div id="studio-chat-output" class="prompt-chat-output"></div>
+			<form method="dialog"><button autofocus>Continue to editor</button></form>
+		</dialog>
 		<div id="studio-context" role="menu" aria-label="File actions" hidden>
 			<button type="button" role="menuitem" data-command="new-file" hidden>
 				<img src="icons/mime-text-x-generic.svg" alt="" /> New file

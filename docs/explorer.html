@@ -5,10 +5,11 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="color-scheme" content="dark" />
 		<title>SUSI Builder Explorer</title>
-		<link rel="icon" href="favicon.ico?v=0db13523" sizes="16x16 32x32 48x48" />
-		<link rel="icon" href="favicon.svg?v=e7e3673c" type="image/svg+xml" sizes="any" />
-		<link rel="stylesheet" href="css/webstation.css?v=ad0ea45f" />
-		<link rel="stylesheet" href="css/vfs-editor.css?v=8037d153" />
+		<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
+		<link rel="icon" href="favicon.svg" type="image/svg+xml" sizes="any" />
+		<link rel="stylesheet" href="css/webstation.css" />
+		<link rel="stylesheet" href="css/select.css" />
+		<link rel="stylesheet" href="css/vfs-editor.css" />
 		<style>
 			#finder-rename {
 				width: min(28rem, calc(100% - 2rem));
@@ -32,9 +33,15 @@
 			}
 			#finder-list [data-role="file-size"] {
 				color: var(--color-muted);
-				font-size: 0.75rem;
+				font-size: 0.92em;
 				white-space: nowrap;
 				text-align: end;
+			}
+			#finder-list li > div[data-drop-target] {
+				border-inline-start-color: var(--color-primary);
+				background: var(--color-accent-soft);
+				outline: 1px dashed var(--color-primary);
+				outline-offset: -1px;
 			}
 			#finder-preview-body > .vfs-image-preview { filter: none; }
 			@media (max-width: 28rem) {
@@ -42,13 +49,14 @@
 				#finder-list [data-role="file-size"] { text-align: start; }
 			}
 		</style>
-		<script defer src="js/navigation-frame.js?v=6f2455e6"></script>
+		<script defer src="js/select-picker.js"></script>
+		<script defer src="js/navigation-frame.js"></script>
 	</head>
 	<body id="explorer-page">
 		<iframe id="site-menu" title="Pages" src="navigation.html#explorer"></iframe>
 		<header>
 			<h1>File explorer</h1>
-			<p>Browse, preview, and edit files stored in this browser.</p>
+			<p>Browse, preview, and edit files stored in this browser. Drop files or folders into the tree to import them. In desktop Chrome or Edge, drag a folder out as a ZIP or use its export button to copy the folder directly.</p>
 		</header>
 
 		<main id="layout">
@@ -107,19 +115,17 @@
 			</div>
 		</dialog>
 
-		<script defer src="js/vfs.js?v=a4b76514"></script>
-	<script defer src="js/vfs-projects.js?v=08fcfe82"></script>
-		<script defer src="js/page-settings.js?v=60de7c53"></script>
-		<script defer src="js/vfs-browser.js?v=6577e771"></script>
-		<script defer src="js/vendor/lossless-json-4.3.3.min.js?v=0fa78b94"></script>
-		<script defer src="js/vendor/hyparquet-1.32.0.min.js?v=f5167313"></script>
-		<script defer src="js/table-formats.js?v=89c789e9"></script>
-		<script defer src="js/vendor/zip-2.25.0.min.js?v=49bb1d59"></script>
-		<script defer src="js/vfs-zip.js?v=5a1453de"></script>
-		<script defer src="js/highlight.min.js?v=b3d289c6"></script>
-		<script defer src="js/vendor/ace-1.45.2/ace.js?v=e1e8dc2a"></script>
-		<script defer src="js/vendor/ace-1.45.2/ext-modelist.js?v=9a44627d"></script>
-		<script defer src="js/vfs-editor.js?v=f56293f0"></script>
+		<script defer src="js/vfs.js" data-vfs-workspace></script>
+		<script defer src="js/workspace-config-store.js"></script>
+		<script defer src="js/page-settings.js"></script>
+		<script defer src="js/vfs-browser.js"></script>
+		<script defer src="js/vendor/lossless-json-4.3.3.min.js"></script>
+		<script defer src="js/vendor/hyparquet-1.32.0.min.js"></script>
+		<script defer src="js/table-formats.js"></script>
+		<script defer src="js/highlight.min.js"></script>
+		<script defer src="js/vendor/ace-1.45.2/ace.js"></script>
+		<script defer src="js/vendor/ace-1.45.2/ext-modelist.js"></script>
+		<script defer src="js/vfs-editor.js"></script>
 		<script>
 			window.addEventListener("DOMContentLoaded", () => {
 	const finderList = document.getElementById("finder-list");
@@ -144,6 +150,7 @@
 	let refreshRequest = 0;
 	let previewRequest = 0;
 	let previewImageUrl;
+	let preparedDrag, dragUrl;
 	let pendingUpload;
 	let uploading = false;
 	let renamePath;
@@ -188,6 +195,8 @@
 		status.dataset.error = String(isError);
 	};
 
+	const validEntryName = name => name.length > 0 && name !== "." && name !== ".." && !/[/\\\x00-\x1f\x7f]/.test(name);
+
 	const createRowAction = (action, title, iconName) => {
 		const button = document.createElement("button");
 		button.type = "button";
@@ -209,6 +218,11 @@
 		if (!play) return;
 		actions.append(play, createRowAction("edit-index", "Edit index.html", "action-edit-pencil"));
 	};
+
+	function addExportAction(actions) {
+		if (typeof window.showDirectoryPicker === "function")
+			actions.appendChild(createRowAction("export-folder", "Export folder… Choose a local destination", "action-go-down"));
+	}
 
 	const renderTree = (node, container) => {
 		const nodes = sortedVfsChildren(node);
@@ -259,6 +273,7 @@
 			if (isFile) {
 				name.type = "button";
 				name.dataset.action = "preview";
+				name.draggable = true;
 				name.setAttribute("aria-controls", "finder-preview");
 				if (selectedPath === child.path) name.setAttribute("aria-current", "true");
 				const details = document.createElement("div");
@@ -282,9 +297,10 @@
 				const upload = createRowAction("upload", `Upload files to ${child.path}`, "action-go-up");
 				upload.disabled = uploading;
 				actions.appendChild(upload);
+				addExportAction(actions);
 			}
 
-			const isWorkspaceConfig = child.path === "/config.json";
+			const isWorkspaceConfig = child.path === WorkspaceConfigStore.defaultPath;
 			if (!isWorkspaceConfig) {
 				actions.appendChild(createRowAction("rename", "Rename " + child.name, "action-insert-text"));
 			}
@@ -298,7 +314,6 @@
 
 			if (child.type === "folder" && isExpanded) {
 				const nestedList = document.createElement("ul");
-				nestedList.dataset.dropPath = child.path;
 				renderTree(child, nestedList);
 				li.appendChild(nestedList);
 			}
@@ -364,7 +379,8 @@
 		rootItem.dataset.path = "/";
 		rootItem.dataset.kind = "folder";
 		const rootRow = document.createElement("div");
-		rootRow.dataset.dropPath = "/";
+		rootRow.draggable = true;
+		rootRow.dataset.dragPath = rootRow.dataset.dropPath = "/";
 		rootRow.dataset.root = "true";
 
 		const rootToggle = document.createElement("button");
@@ -389,6 +405,7 @@
 		const rootActions = document.createElement("span");
 		rootActions.dataset.role = "actions";
 		addWebsiteActions(tree, rootActions);
+		addExportAction(rootActions);
 		rootActions.appendChild(createRowAction("download", "Download folder as ZIP", "action-document-save-as"));
 		rootRow.appendChild(rootActions);
 
@@ -396,11 +413,11 @@
 
 		if (isRootExpanded) {
 			const nestedList = document.createElement("ul");
-			nestedList.dataset.dropPath = "/";
 			renderTree(tree, nestedList);
 			rootItem.appendChild(nestedList);
 		}
 
+		preparedDrag = null;
 		finderList.replaceChildren(rootItem);
 		finderEmpty.style.display = entries.length ? "none" : "block";
 		void loadVisibleFileSizes(vfs, request);
@@ -557,7 +574,7 @@
 			changes.selectedFile = selectedPath;
 			updatePreview(selectedPath);
 		}
-		if (![source, target].includes("/config.json") && Object.keys(changes).length) {
+		if (![source, target].includes(WorkspaceConfigStore.defaultPath) && Object.keys(changes).length) {
 			return pageSettings.save("explorer", changes);
 		}
 	}
@@ -565,6 +582,7 @@
 	const openEditor = createVfsEditor({
 		onStatus: setStatus,
 		async onSaved(path) {
+			preparedDrag = null;
 			if (selectedPath === path) updatePreview(path);
 			const label = finderList.querySelector(`li[data-path="${CSS.escape(path)}"] [data-role="file-size"]`);
 			if (label) await updateFileSize(await window.vfsReady, label);
@@ -582,7 +600,7 @@
 		const entry = isFolder ? path.slice(0, -1) : path;
 		const name = renameName.value;
 		renameError.textContent = "";
-		if (!name.trim() || name === "." || name === ".." || /[/\\\x00-\x1f\x7f]/.test(name)) {
+		if (!name.trim() || !validEntryName(name)) {
 			renameError.textContent = "Enter a valid " + kind + " name without a path.";
 			renameName.focus();
 			return;
@@ -623,18 +641,24 @@
 		const name = window.prompt("Folder name");
 		if (!name) return;
 		const trimmed = name.trim().replace(/^\/+|\/+$/g, "");
-		if (!trimmed || trimmed.includes("/")) {
-			window.alert("Folder name must be a single segment.");
+		if (!validEntryName(trimmed)) {
+			setStatus("Enter a valid folder name without a path.", true);
 			return;
 		}
+		const path = `/${trimmed}/`;
 		try {
 			const vfs = await window.vfsReady;
-			expandedPaths.add(await vfs.mkdir(`/${trimmed}/`));
-			pageSettings.save("explorer", { expandedFolders: [...expandedPaths] });
-			await refreshView();
+			await vfs.fileSystem.mkdir(path);
 		} catch (error) {
-			setStatus(`Unable to create folder: ${error?.message || error}`, true);
+			setStatus(error?.code === "EEXIST" ? `A file or folder named “${trimmed}” already exists.`
+				: `Unable to create folder: ${error?.message || error}`, true);
+			return;
 		}
+		expandedPaths.add(path);
+		pageSettings.save("explorer", { expandedFolders: [...expandedPaths] });
+		setStatus(`Created folder ${path}.`);
+		try { await refreshView(); }
+		catch (error) { setStatus(`Created folder ${path}. Unable to refresh the file list. ${error?.message || error}`, true); }
 	});
 
 	function chooseUpload(folder, button, zipOnly = false) {
@@ -650,39 +674,53 @@
 	uploadButton.addEventListener("click", () => chooseUpload("/", uploadButton));
 	uploadZipButton.addEventListener("click", () => chooseUpload("/", uploadZipButton, true));
 
-	uploadInput.addEventListener("change", async (event) => {
+	uploadInput.addEventListener("change", (event) => {
 		const files = Array.from(event.target.files);
 		if (!files.length || !pendingUpload || uploading) return;
 		const { folder, button, zipOnly } = pendingUpload;
 		pendingUpload = undefined;
-		const fromFolderRow = button.dataset.action === "upload";
+		void uploadFiles(folder, files, { button, extractZip: zipOnly || button === uploadButton, zipOnly });
+	});
+
+	async function uploadFiles(folder, items, { button, extractZip, zipOnly, exclusive = false, failures = [] } = {}) {
+		const total = items.length + failures.length;
+		const includesFolders = items.some(item => item.isDirectory);
+		const importedFolders = [];
 		uploading = uploadButton.disabled = uploadZipButton.disabled = true;
 		for (const action of finderList.querySelectorAll('[data-action="upload"]')) action.disabled = true;
-		const failures = [];
 		let uploaded = 0;
 		let lastImport;
 		try {
 			const vfs = await window.vfsReady;
-			for (const file of files) {
+			for (const file of items) {
 				try {
+					if (file.isDirectory) {
+						setStatus(`Importing folder ${file.name} into ${folder}…`);
+						const path = await importDroppedVfsFolder(vfs, folder, file);
+						importedFolders.push(path);
+						expandedPaths.add(path);
+						uploaded++;
+						continue;
+					}
 					// The toolbar supports ZIP extraction. A folder upload stores the selected files as they are.
-					if (zipOnly || (!fromFolderRow && /\.zip$/i.test(file.name))) {
+					if (zipOnly || (extractZip && /\.zip$/i.test(file.name))) {
 						setStatus(`Extracting ${file.name}…`);
-						lastImport = await vfsZip.importFolder(vfs, file);
+						lastImport = await vfs.archive.importFolder(file);
 						expandedPaths.add(vfs.parentDir(lastImport.slice(0, -1)));
 						expandedPaths.add(lastImport);
 					} else {
 						setStatus(`Uploading ${file.name} to ${folder}…`);
-						if (!file.name || file.name === "." || file.name === ".." || /[/\\\x00-\x1f\x7f]/.test(file.name)) {
+						if (!validEntryName(file.name)) {
 							throw new Error("Invalid file name.");
 						}
 						const path = folder + file.name;
-						await vfs.fileSystem.write(path, new Uint8Array(await file.arrayBuffer()));
+						await vfs.fileSystem.write(path, new Uint8Array(await file.arrayBuffer()), { exclusive });
 						if (selectedPath === path) updatePreview(path);
 					}
 					uploaded++;
 				} catch (error) {
-					failures.push(`${file.name}: ${error?.message || error}`);
+					const reason = error?.code === "EEXIST" ? "That name already exists in this folder." : error?.message || error;
+					failures.push(`${file.name}: ${reason}`);
 				}
 			}
 			if (uploaded) {
@@ -690,8 +728,10 @@
 				pageSettings.save("explorer", { expandedFolders: [...expandedPaths] });
 				await refreshView();
 			}
-			if (failures.length) setStatus(`Uploaded ${uploaded} of ${files.length}. ${failures.join(" · ")}`, true);
-			else if (lastImport && files.length === 1) setStatus(`Extracted to ${lastImport}`);
+			if (failures.length) setStatus(`Uploaded ${uploaded} of ${total}. ${failures.join(" · ")}`, true);
+			else if (includesFolders && total === 1) setStatus(`Imported folder ${importedFolders[0]}`);
+			else if (includesFolders) setStatus(`Imported ${uploaded} items into ${folder}. Folders: ${importedFolders.join(", ")}`);
+			else if (lastImport && total === 1) setStatus(`Extracted to ${lastImport}`);
 			else if (lastImport) setStatus(`Uploaded ${uploaded} files.`);
 			else setStatus(`Uploaded ${uploaded} ${uploaded === 1 ? "file" : "files"} to ${folder}.`);
 		} catch (error) {
@@ -700,14 +740,14 @@
 			uploadInput.value = "";
 			uploading = uploadButton.disabled = uploadZipButton.disabled = false;
 			for (const action of finderList.querySelectorAll('[data-action="upload"]')) action.disabled = false;
-			if (document.activeElement === document.body || document.activeElement === uploadInput) {
-				const target = fromFolderRow
+			if (button && (document.activeElement === document.body || document.activeElement === uploadInput)) {
+				const target = button.dataset.action === "upload"
 					? finderList.querySelector(`li[data-path="${CSS.escape(folder)}"] > div [data-action="upload"]`)
 					: button;
 				target?.focus();
 			}
 		}
-	});
+	}
 
 	finderList.addEventListener("click", async (event) => {
 		const row = event.target.closest("li > div");
@@ -720,6 +760,19 @@
 
 		if (!action || action === "preview") {
 			if (item.dataset.kind === "file" && !event.target.closest('[data-role="actions"]')) selectFile(row, path);
+			return;
+		}
+
+		if (action === "export-folder") {
+			button.disabled = true;
+			try {
+				const destination = await window.showDirectoryPicker({ id: "explorer-export", mode: "readwrite" });
+				setStatus(`Exporting ${path} to ${destination.name}…`);
+				const name = await exportVfsFolderToDirectory(await window.vfsReady, path, destination);
+				setStatus(`Exported folder to ${destination.name}/${name}.`);
+			} catch (error) {
+				if (error.name !== "AbortError") setStatus(error.message || "Folder export failed.", true);
+			} finally { button.disabled = false; }
 			return;
 		}
 
@@ -793,7 +846,7 @@
 				changes.selectedFile = null;
 				showPreviewPlaceholder();
 			}
-			if (path !== "/config.json" && Object.keys(changes).length) pageSettings.save("explorer", changes);
+			if (path !== WorkspaceConfigStore.defaultPath && Object.keys(changes).length) pageSettings.save("explorer", changes);
 			await refreshView();
 			return;
 		}
@@ -803,7 +856,7 @@
 			try {
 				if (path.endsWith("/")) {
 					setStatus(`Creating ZIP for ${path}…`);
-					const { name, blob } = await vfsZip.exportFolder(vfs, path);
+					const { name, blob } = await vfs.archive.exportFolder(path);
 					downloadVfsBlob(blob, name);
 					setStatus(`ZIP ready: ${name}`);
 				} else {
@@ -817,71 +870,153 @@
 		}
 	});
 
+	const filePane = document.getElementById("finder-files");
+	const moveType = "application/x-susi-explorer-path";
+	const hasFiles = transfer => transfer.files.length > 0 || Array.from(transfer.types).includes("Files") ||
+		Array.from(transfer.items || []).some(item => item.kind === "file");
+	const folderAt = element => element.closest('li[data-kind="folder"]')?.firstElementChild || finderList.querySelector("[data-root]");
+
+	function highlightDrop(row) {
+		if (row === activeDropTarget) return;
+		if (activeDropTarget) delete activeDropTarget.dataset.dropTarget;
+		activeDropTarget = row;
+		if (row) row.dataset.dropTarget = "true";
+	}
+
+	// dragstart needs a synchronous payload. Start folder compression on press, never just by hovering.
+	function prepareDrag(row) {
+		if (!row || preparedDrag?.row === row) return;
+		const path = row.dataset.dragPath;
+		const item = preparedDrag = { row };
+		window.vfsReady.then(async vfs => path.endsWith("/") ? vfs.archive.exportFolder(path)
+			: { name: vfs.baseName(path), blob: await vfsDownloadBlob(vfs, path) }).then(result => {
+			if (preparedDrag !== item) return;
+			item.result = result;
+			if (item.waiting) setStatus(`${result.name} is ready. Drag it again to copy it to your computer.`);
+		}).catch(error => {
+			if (preparedDrag !== item) return;
+			preparedDrag = null;
+			if (item.waiting) setStatus("Unable to prepare the download: " + (error?.message || error), true);
+		});
+	}
+	for (const type of ["pointerover", "pointerdown", "focusin"]) {
+		finderList.addEventListener(type, event => {
+			if (event.target.closest('[data-role="actions"], [data-action="toggle"]')) return;
+			const row = event.target.closest("[data-drag-path]");
+			if (type === "pointerdown" || (!preparedDrag?.waiting && row?.parentElement.dataset.kind === "file")) prepareDrag(row);
+		});
+	}
+	finderList.addEventListener("pointerout", event => {
+		const row = preparedDrag?.row;
+		if (row && !preparedDrag.waiting && !event.buttons && row.contains(event.target) && !row.contains(event.relatedTarget)) preparedDrag = null;
+	});
+	// The OS may start reading the URL after dragend.
+	function releaseDragUrl() {
+		if (dragUrl) {
+			const url = dragUrl;
+			setTimeout(() => URL.revokeObjectURL(url), 60000);
+			dragUrl = undefined;
+		}
+	}
+	window.addEventListener("pagehide", () => { preparedDrag = null; releaseDragUrl(); });
+	window.addEventListener("blur", () => { if (!preparedDrag?.waiting) preparedDrag = null; });
+
 	finderList.addEventListener("dragstart", (event) => {
 		const row = event.target.closest("[data-drag-path]");
 		if (!row) return;
-		if (event.target.closest("[data-role=\"actions\"], button, img, [data-action=\"toggle\"]")) {
+		if (event.target.closest('[data-role="actions"], [data-action="toggle"]')) {
 			event.preventDefault();
 			return;
 		}
-		event.dataTransfer.setData("text/plain", row.dataset.dragPath);
+		event.dataTransfer.setData(moveType, row.dataset.dragPath);
 		event.dataTransfer.effectAllowed = "move";
+		prepareDrag(row);
+		if (preparedDrag.result) {
+			if (preparedDrag.waiting) setStatus("");
+			preparedDrag.waiting = false;
+			releaseDragUrl();
+			const { blob, name } = preparedDrag.result;
+			event.dataTransfer.setData("text/plain", row.dataset.dragPath);
+			dragUrl = URL.createObjectURL(blob);
+			event.dataTransfer.setData("DownloadURL", blob.type + ":" + name.replaceAll(":", "_") + ":" + dragUrl);
+			event.dataTransfer.effectAllowed = row.dataset.root ? "copy" : "copyMove";
+		} else {
+			preparedDrag.waiting = true;
+			setStatus(row.dataset.dragPath.endsWith("/") ? "Preparing ZIP for drag-out…" : "Preparing file for drag-out…");
+		}
 		row.dataset.dragging = "true";
 	});
 
 	finderList.addEventListener("dragend", (event) => {
+		releaseDragUrl();
+		if (!preparedDrag?.waiting) preparedDrag = null;
 		const row = event.target.closest("[data-drag-path]");
 		if (row) {
 			delete row.dataset.dragging;
 		}
-		if (activeDropTarget) {
-			delete activeDropTarget.dataset.dropTarget;
-			activeDropTarget = null;
-		}
+		highlightDrop(null);
 	});
 
-	finderList.addEventListener("dragover", (event) => {
-		const target = event.target.closest("[data-drop-path]");
-		if (!target) return;
+	filePane.addEventListener("dragover", event => {
+		const transfer = event.dataTransfer, internal = Array.from(transfer.types).includes(moveType);
+		const external = !internal && hasFiles(transfer);
+		if (!internal && !external) return;
 		event.preventDefault();
-		event.dataTransfer.dropEffect = "move";
-		if (activeDropTarget && activeDropTarget !== target) {
-			delete activeDropTarget.dataset.dropTarget;
-		}
-		activeDropTarget = target;
-		activeDropTarget.dataset.dropTarget = "true";
+		const rootDrag = internal && finderList.querySelector('[data-root][data-dragging]');
+		const row = rootDrag || (external && uploading) ? null : folderAt(event.target);
+		transfer.dropEffect = row ? (external ? "copy" : "move") : "none";
+		highlightDrop(row);
 	});
 
-	finderList.addEventListener("dragleave", (event) => {
-		const target = event.target.closest("[data-drop-path]");
-		if (!target || !activeDropTarget) return;
-		if (target === activeDropTarget) {
-			delete activeDropTarget.dataset.dropTarget;
-			activeDropTarget = null;
-		}
+	filePane.addEventListener("dragleave", event => {
+		if (!filePane.contains(event.relatedTarget)) highlightDrop(null);
 	});
 
-	finderList.addEventListener("drop", async (event) => {
-		const target = event.target.closest("[data-drop-path]");
-		if (!target) return;
+	filePane.addEventListener("drop", async event => {
+		const transfer = event.dataTransfer, internal = Array.from(transfer.types).includes(moveType);
+		const external = !internal && hasFiles(transfer);
+		if (!internal && !external) return;
 		event.preventDefault();
-		const srcPath = event.dataTransfer.getData("text/plain");
-		const destDir = target.dataset.dropPath || "/";
-		if (!srcPath || !destDir) return;
-		const vfs = await window.vfsReady;
-		try {
-			const destPath = await vfs.moveTree(srcPath, destDir);
-			await updateMovedPaths(srcPath, destPath);
-		} catch (error) {
-			if (error instanceof Error && error.message) {
-				window.alert(error.message);
-			} else {
-				window.alert("Unable to move entry.");
+		highlightDrop(null);
+		const target = folderAt(event.target);
+		if (!target) return;
+		const destDir = target.dataset.dropPath;
+		if (external) {
+			if (uploading) return;
+			// Capture native files before the drop event's protected data store closes.
+			const items = Array.from(transfer.items || []).filter(item => item.kind === "file");
+			const entries = [], failures = [];
+			for (const item of items) {
+				const entry = item.webkitGetAsEntry?.();
+				if (entry?.isDirectory) entries.push(entry);
+				else {
+					const file = item.getAsFile();
+					if (file) entries.push(file);
+					else failures.push("A dropped file could not be read.");
+				}
 			}
+			await uploadFiles(destDir, items.length ? entries : Array.from(transfer.files), { exclusive: true, failures });
+			return;
 		}
-		if (activeDropTarget) {
-			delete activeDropTarget.dataset.dropTarget;
-			activeDropTarget = null;
+		const srcPath = transfer.getData(moveType);
+		if (!srcPath.startsWith("/") || srcPath === "/") return;
+		try {
+			const vfs = await window.vfsReady;
+			const isFolder = srcPath.endsWith("/");
+			const destPath = destDir + vfs.baseName(srcPath) + (isFolder ? "/" : "");
+			// Explorer paths are literal VFS keys. A move must address the same entry after normalization.
+			if ([srcPath, destPath].some(path => vfs.fileSystem.resolvePath("/", path) !== path.replace(/\/$/, ""))) {
+				throw new Error("Invalid move path.");
+			}
+			await vfs.fileSystem.mv(srcPath, destPath, { overwrite: false });
+			await updateMovedPaths(srcPath, destPath);
+			if (srcPath !== destPath) setStatus(`Moved to ${destPath}.`);
+		} catch (error) {
+			const collision = ["EEXIST", "EISDIR", "ENOTDIR"].includes(error?.code);
+			const reason = collision ? "That name is already in use in the destination folder."
+				: error?.code === "EINVAL" ? "Choose a folder outside the folder being moved."
+				: error?.message || "The move failed.";
+			setStatus(`Unable to move ${srcPath}. ${reason}`, true);
 		}
 		await refreshView();
 	});

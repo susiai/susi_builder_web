@@ -4,12 +4,81 @@
 	const get = id => document.getElementById(id);
 	const formatMiB = bytes => `${(bytes / 1048576).toFixed(1)} MiB`;
 
+	void initPromptForm("chat", [
+		{ input: get("systemprompt"), key: "systemprompt", fallback: llmClient.normalizeConfig().systemprompt }
+	], "Chat prompt saved.");
+	void initPromptForm("studio", [
+		{ input: get("studio-system-prompt"), key: "studioFilePrompt", placeholder: "<file>", fallback: StudioFileChat.defaultPrompt },
+		{ input: get("studio-marked-prompt"), key: "studioMarkedPrompt", placeholder: "<marked>", fallback: StudioFileChat.defaultMarkedPrompt }
+	], "Code Studio prompts saved.");
 	void initSpeechToText();
 	void initSpeechOutput();
 
 	function notice(element, message, error = false) {
 		if (element.textContent !== message) element.textContent = message;
 		element.toggleAttribute("data-error", error);
+	}
+
+	async function initPromptForm(context, fields, successMessage) {
+		const form = get(context + "-prompt-form");
+		const save = form.querySelector('[type="submit"]');
+		const reset = get(context + "-prompt-default"), status = get(context + "-prompt-status");
+		try {
+			const store = new WorkspaceConfigStore(await window.vfsReady);
+			let saved = await store.read();
+			const savedValue = (field, config = saved) => field.key === "systemprompt"
+				? llmClient.normalizeConfig({ systemprompt: config.systemprompt }).systemprompt : config[field.key] ?? field.fallback;
+			const changed = field => field.input.value !== savedValue(field);
+			function edited() {
+				for (const { input, placeholder } of fields) {
+					input.setCustomValidity(!placeholder || input.value.includes(placeholder) ? "" : `Include the ${placeholder} placeholder.`);
+				}
+				save.disabled = !fields.some(changed);
+				notice(status, "");
+			}
+			reset.disabled = false;
+			for (const field of fields) {
+				field.input.value = savedValue(field);
+				field.input.disabled = false;
+			}
+			edited();
+			form.addEventListener("input", edited);
+			reset.addEventListener("click", () => {
+				for (const field of fields) field.input.value = field.fallback;
+				edited();
+				fields[0].input.focus();
+			});
+			form.addEventListener("submit", async event => {
+				event.preventDefault();
+				if (!form.reportValidity()) return;
+				const changes = fields.filter(changed);
+				save.disabled = reset.disabled = true;
+				for (const { input } of fields) input.disabled = true;
+				try {
+					saved = await store.update(config => {
+						for (const field of changes) {
+							const current = savedValue(field, config);
+							if (current !== savedValue(field) && current !== field.input.value) {
+								throw new Error("The prompt changed in another page. Reload Models before saving.");
+							}
+							config[field.key] = field.input.value;
+						}
+						return config;
+					});
+					for (const field of fields) field.input.value = savedValue(field);
+					edited();
+					notice(status, successMessage);
+				} catch (error) {
+					notice(status, error.message, true);
+				} finally {
+					for (const { input } of fields) input.disabled = false;
+					reset.disabled = false;
+					save.disabled = !fields.some(changed);
+				}
+			});
+		} catch (error) {
+			notice(status, error.message || "Unable to load the system prompt.", true);
+		}
 	}
 
 	function speechForm(prefix, submitName, offLabel) {

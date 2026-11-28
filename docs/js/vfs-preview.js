@@ -463,6 +463,7 @@ function createVfsPreview(frame, snapshot, {
 			port = event.ports[0];
 			const connection = port;
 			const { signal } = session;
+			if (localModel) signal.addEventListener("abort", () => localModel("close", []), { once: true });
 			const requests = new Map();
 			if (projectFiles || projectWorkspace || localModel) connection.onmessage = async ({ data }) => {
 				if (signal.aborted || !Number.isSafeInteger(data?.id)) return;

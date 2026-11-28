@@ -122,7 +122,7 @@ const { tableFormats, tableParquet } = (() => {
 			return encoder.encode(lines.length ? lines.join("\n") + "\n" : "");
 		}
 		if (format !== "csv") throw new Error("Choose a supported file format.");
-		const { delimiter, eol, trailing, bom } = sheet.csv || { delimiter: ",", eol: "\r\n", trailing: true };
+		const { delimiter = ",", eol = "\r\n", trailing = true, bom } = sheet.csv || {};
 		function line(fields, header = false) {
 			return fields.map(v => {
 				const s = textValue(v);
@@ -458,7 +458,7 @@ const { tableFormats, tableParquet } = (() => {
 	})();
 
 	return {
-		tableFormats: { read, write, parseTSV: text => csvSheet(text, false, "utf-8", Infinity, { delimiter: "\t", header: false, clipboard: true }).rows, extension: tableFileFormat, textValue, json, kind, parseCell, number, isNumber, record },
+		tableFormats: { read, write, parseTSV: text => csvSheet(text, false, "utf-8", Infinity, { delimiter: "\t", header: false, clipboard: true }).rows, extension: path => tableFileFormat(path), textValue, json, kind, parseCell, number, isNumber, record },
 		tableParquet: parquet
 	};
 })();

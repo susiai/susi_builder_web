@@ -2,42 +2,36 @@
 
 const documentAttachments = (() => {
 	const base = window.__susiPreview ? new URL("js/", document.baseURI) : document.currentScript.src;
-	const officeBundle = new URL("vendor/officeparser-8.9.0.browser.slim.iife.js?v=db8b9914", base);
-	const pdfWorkerBundle = new URL("vendor/pdfjs-6.5.438.worker.js?v=c1674370", base);
+	const officeBundle = new URL("vendor/officeparser-8.9.0.browser.slim.iife.js", base);
+	const pdfWorkerBundle = new URL("vendor/pdfjs-6.5.438.worker.js", base);
 	const formats = {
 		xlsx: {
 			fileType: "xlsx",
-			mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+			mimeType: ConversationStore.documentTypes.xlsx,
 			icon: "mime-x-office-spreadsheet"
 		},
 		docx: {
 			fileType: "docx",
-			mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			mimeType: ConversationStore.documentTypes.docx,
 			icon: "mime-x-office-document"
 		},
 		pptx: {
 			fileType: "pptx",
-			mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+			mimeType: ConversationStore.documentTypes.pptx,
 			icon: "mime-x-office-presentation"
 		},
 		pdf: {
 			fileType: "pdf",
-			mimeType: "application/pdf",
+			mimeType: ConversationStore.documentTypes.pdf,
 			icon: "mime-application-pdf"
 		}
 	};
 	const scripts = new Map();
-	const maxImageURLLength = 140000;
+	const { maxImageURLLength } = ConversationStore;
 
 	function isImage(mimeType, name = "") {
 		return mimeType.startsWith("image/") || ((!mimeType || mimeType === "application/octet-stream") &&
 			/\.(?:apng|avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(name));
-	}
-
-	function isImageURL(url, mimeType) {
-		return typeof url === "string" && url.length <= maxImageURLLength &&
-			(mimeType === "image/png" || mimeType === "image/jpeg") &&
-			url.startsWith(`data:${mimeType};base64,`) && /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(url);
 	}
 
 	async function readImage(file, signal) {
@@ -184,5 +178,5 @@ const documentAttachments = (() => {
 		return `${fence}text\n${text}${lineBreak}${fence}\n`;
 	}
 
-	return { findFormat, read, readText, literalMarkdown, isImage, isImageURL, readImage };
+	return { findFormat, read, readText, literalMarkdown, isImage, readImage };
 })();

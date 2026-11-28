@@ -1,0 +1,95 @@
+.prompt-chat-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.26rem 0.55rem;
+	border-color: var(--color-border);
+	background: transparent;
+	color: var(--color-foreground);
+	font-size: 0.78rem;
+}
+
+.prompt-chat-toggle span, .prompt-chat label span { color: var(--color-primary); }
+.prompt-chat-toggle:enabled:is(:hover, [aria-expanded="true"]) {
+	border-color: var(--color-primary);
+	background: var(--color-accent-soft);
+}
+.prompt-chat-toggle:disabled { opacity: 0.45; }
+
+.prompt-chat:not([hidden]) {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 0.35rem 0.75rem;
+	margin: 0;
+	padding: 0.65rem clamp(0.65rem, 2vw, 1.25rem) 0.8rem;
+	border-top: 1px solid var(--color-border);
+	background: var(--color-background-box);
+}
+
+.prompt-chat label {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	margin: 0;
+	font-size: 0.85rem;
+	font-weight: 650;
+}
+
+.prompt-chat-close {
+	padding: 0.1rem 0.45rem;
+	border: 0;
+	background: transparent;
+	color: var(--color-muted);
+	line-height: 1.4;
+}
+.prompt-chat-close:hover { color: var(--color-foreground); }
+.prompt-chat-input {
+	grid-column: 1 / -1;
+	min-height: 2.6rem;
+	max-height: min(8rem, 22dvh);
+	margin: 0;
+	padding: 0.5rem 0.65rem;
+	font: 0.9rem/1.4 var(--font-body);
+}
+.prompt-chat-actions {
+	grid-column: 1 / -1;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.6rem;
+}
+.prompt-chat-status { color: var(--color-muted); font-size: 0.74rem; overflow-wrap: anywhere; }
+.prompt-chat[aria-busy="true"] .prompt-chat-status { color: var(--color-signal); }
+.prompt-chat-send {
+	flex: none;
+	min-height: 2.6rem;
+	font: 750 0.78rem/1.2 var(--font-mono);
+	text-transform: uppercase;
+	clip-path: var(--cut-corners);
+}
+.prompt-chat-send:focus-visible { outline-offset: -3px; outline-color: var(--color-background); }
+
+.prompt-chat-result {
+	width: min(32rem, calc(100% - 2rem));
+	max-height: 80dvh;
+	margin: auto;
+	padding: 1.25rem;
+	border: 1px solid var(--color-border);
+	border-top: 2px solid var(--color-primary);
+	border-radius: var(--radius);
+	background: var(--color-background-box);
+	color: var(--color-foreground);
+	box-shadow: 0 1rem 4rem rgb(0 0 0 / 55%);
+}
+.prompt-chat-result[open] { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.7rem; }
+.prompt-chat-result::backdrop { background: rgb(3 5 11 / 72%); }
+.prompt-chat-result h2, .prompt-chat-result p, .prompt-chat-result form { margin: 0; }
+.prompt-chat-output {
+	min-height: 0;
+	overflow: auto;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+	line-height: 1.5;
+}
+.prompt-chat-result form { justify-self: end; }

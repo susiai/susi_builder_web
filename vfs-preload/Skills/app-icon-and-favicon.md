@@ -45,4 +45,4 @@ to the app.
 
 Refresh **Apps** and check the app tile. Open the exported or published app directly in its own browser tab and
 check its favicon there. The Builder preview tab displays the preview page's icon. If the browser still shows an
-older favicon, try a fresh tab or add a version query such as `./favicon.svg?v=2` to the icon link.
+older favicon, try a hard reload.

@@ -10,7 +10,7 @@
 	const screenshotPreview = get("skill-screenshot-preview"), screenshotImage = get("skill-screenshot-image");
 	const generateScreenshot = get("skill-generate-screenshot"), discardScreenshot = get("skill-discard-screenshot");
 	const write = get("skill-write"), savePrompts = get("skill-save-prompts"), save = get("skill-save");
-	const library = get("skill-open-library");
+	const libraryLink = get("skill-open-library");
 	const sourceStatus = get("skill-source-status"), promptsStatus = get("skill-prompts-status"), saveStatus = get("skill-save-status");
 	const modelLabel = get("skill-creator-model"), modelWarning = get("skill-creator-model-warning");
 	const modelLoading = get("skill-model-loading");
@@ -34,7 +34,7 @@
 		namePrompt: "Give the supplied skill a short, descriptive name that makes it easy to find. " +
 			"Use the language of the skill. Return only one plain-text line of up to 80 characters, without a file extension."
 	};
-	let vfs, modelAvailable = false, imageModelAvailable = false, modelRequest = 0, operation, saving = false;
+	let skills, modelAvailable = false, imageModelAvailable = false, modelRequest = 0, operation, saving = false;
 	let screenshot;
 	let draftSaved = false;
 
@@ -44,7 +44,7 @@
 	}
 
 	function controls() {
-		const locked = !vfs || Boolean(operation) || saving;
+		const locked = !skills || Boolean(operation) || saving;
 		generate.disabled = locked || !modelAvailable || !url.value.trim();
 		capture.disabled = locked || !captureSupported;
 		generateScreenshot.disabled = locked || !screenshot || !imageModelAvailable;
@@ -93,7 +93,7 @@
 
 	function showModel(model, config) {
 		modelAvailable = Boolean(model?.ready);
-		imageModelAvailable = modelAvailable && llmClient.supportsImages(llmClient.requestOptions(config));
+		imageModelAvailable = modelAvailable && client.supportsImages(llmClient.requestOptions(config));
 		modelLabel.textContent = modelAvailable ? `Model · ${model.label}` : "";
 		modelWarning.hidden = modelAvailable;
 		modelWarning.querySelector("strong").textContent = model?.message || "No model active.";
@@ -110,9 +110,8 @@
 		try {
 			const config = await readLLMConfig();
 			if (request !== modelRequest) return;
-			if (config.chatProvider !== "browser") llmLocal.close();
 			renderModelProgress(modelLoading);
-			const model = await client.modelStatus(llmClient.requestOptions(config), {
+			const model = await client.selectModel(config).status({
 				onProgress(state) {
 					if (request !== modelRequest) return;
 					modelWarning.hidden = true;
@@ -148,7 +147,7 @@
 		] : text;
 		const screenshotInstructions = image ?
 			"Use only what is visible in the screenshot. Mark cropped or unreadable details as gaps. Cite a URL only if one was supplied. " : "";
-		const response = await client.completeChat({
+		const { message } = await client.completeChat({
 			...llmClient.requestOptions(config), signal,
 			onProgress: showModelPreparation,
 			messages: [
@@ -157,13 +156,10 @@
 				{ role: "user", content }
 			]
 		});
-		const reply = response?.choices?.[0]?.message?.content;
+		const reply = message.content;
 		if (typeof reply !== "string" || !reply.trim()) throw new Error("The model returned no text.");
 		return reply.trim();
 	}
-
-	const validName = name => name.length > 0 && name.length <= 80 && name !== "." && name !== ".." &&
-		!/[\\/\x00-\x1f\x7f]/.test(name);
 
 	function openDraft(body) {
 		draftText.value = body;
@@ -171,7 +167,7 @@
 		draftForm.hidden = false;
 		draftSaved = false;
 		get("skill-draft-empty").hidden = true;
-		library.hidden = true;
+		libraryLink.hidden = true;
 		notice(saveStatus, "");
 	}
 
@@ -188,7 +184,7 @@
 
 	promptForm.addEventListener("submit", async event => {
 		event.preventDefault();
-		if (!vfs || operation || saving) return;
+		if (!skills || operation || saving) return;
 		saving = true;
 		controls();
 		try { await storePrompts(); }
@@ -242,11 +238,11 @@
 			const sourceURL = url.value.trim();
 			const address = image && !sourceURL ? undefined : parseAgentPageURL(sourceURL);
 			const config = await readLLMConfig();
-			if (image && !llmClient.supportsImages(llmClient.requestOptions(config))) {
+			if (image && !client.supportsImages(llmClient.requestOptions(config))) {
 				imageModelAvailable = false;
 				throw new Error("Select a vision-capable model to generate a skill from a screenshot.");
 			}
-			const model = await client.modelStatus(llmClient.requestOptions(config), { signal, onProgress: showModelPreparation });
+			const model = await client.selectModel(config).status({ signal, onProgress: showModelPreparation });
 			showModel(model, config);
 			if (!model.ready) { notice(sourceStatus, ""); return; }
 			const prompts = await storePrompts();
@@ -267,7 +263,7 @@
 			const name = (await ask(config, prompts.namePrompt, { skill: body.slice(0, 15000) }, signal))
 				.replace(/^#+\s+/, "").replace(/^["“`]([^\n]*)["”`]$/, "$1").trim();
 			signal.throwIfAborted();
-			if (!validName(name)) throw new Error("The model did not return a usable name. Enter a name in the draft.");
+			if (!SkillLibrary.validName(name)) throw new Error("The model did not return a usable name. Enter a name in the draft.");
 			draftName.value = name;
 			notice(sourceStatus, input.truncated ? "Draft ready. Only part of the web page could be included." : "Draft ready.");
 			draftName.focus();
@@ -290,27 +286,15 @@
 
 	draftForm.addEventListener("submit", async event => {
 		event.preventDefault();
-		if (!vfs || operation || saving) return;
-		const name = draftName.value.trim();
-		const body = draftText.value.trim();
-		if (!validName(name) || !body || body.length > 15000) {
-			notice(saveStatus, !validName(name) ? "Enter a name of up to 80 characters without slashes or control characters."
-				: "Enter skill text of up to 15,000 characters.", true);
-			return;
-		}
-		const path = name + ".md";
+		if (!skills || operation || saving) return;
 		saving = true;
-		library.hidden = true;
+		libraryLink.hidden = true;
 		controls();
 		try {
-			if ((await workspaceSkills.readEnabled(vfs)).has(path)) {
-				throw Object.assign(new Error("That skill name is already in use."), { code: "EEXIST" });
-			}
-			await vfs.fileSystem.mkdir(workspaceSkills.root, { recursive: true });
-			await vfs.fileSystem.write(workspaceSkills.root + path, `# ${name}\n\n${body}\n`, { exclusive: true });
+			const path = await skills.create(draftName.value.trim(), draftText.value);
 			draftSaved = true;
-			library.href = "skill_library.html?" + new URLSearchParams({ file: path });
-			library.hidden = false;
+			libraryLink.href = "skill_library.html?" + new URLSearchParams({ file: path });
+			libraryLink.hidden = false;
 			notice(saveStatus, "Skill saved. Activate it in Skill Library before using it in Chat.");
 		} catch (error) {
 			notice(saveStatus, error.code === "EEXIST" ? "A skill with this name already exists. Choose another name."
@@ -323,7 +307,7 @@
 		const saved = await pageSettings.read("skillCreator");
 		bodyPrompt.value = typeof saved.bodyPrompt === "string" ? saved.bodyPrompt : defaults.bodyPrompt;
 		namePrompt.value = typeof saved.namePrompt === "string" ? saved.namePrompt : defaults.namePrompt;
-		vfs = ready;
+		skills = new SkillLibrary(ready);
 		notice(sourceStatus, "");
 		controls();
 		void refreshModel();

@@ -337,7 +337,7 @@ html:has(#studio-page) {
 
 #studio-panel:not([hidden]) {
 	display: grid;
-	grid-template-rows: auto minmax(0, 1fr);
+	grid-template-rows: auto minmax(0, 1fr) auto;
 	min-height: 0;
 }
 
@@ -357,6 +357,21 @@ html:has(#studio-page) {
 	color: var(--color-signal);
 }
 
+#studio-chat-undo:not([hidden]) {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 0.35rem;
+	margin-inline-start: auto;
+	padding: 0.15rem 0.5rem;
+	border-color: var(--color-border);
+	background: var(--color-background-box);
+	color: var(--color-foreground);
+	font: inherit;
+}
+#studio-chat-undo img { width: 1rem; height: 1rem; }
+#studio-chat-undo:enabled:hover { border-color: var(--color-primary); }
+
 #studio-dictation-feedback {
 	padding: 0.35rem 0.8rem;
 	border-bottom: 1px solid var(--color-line);
@@ -375,6 +390,22 @@ html:has(#studio-page) {
 }
 
 #studio-editor[hidden] { display: none; }
+
+#studio-chat-selection {
+	padding-inline-start: 0.5rem;
+	border-inline-start: 1px solid var(--color-border);
+	color: var(--color-muted);
+	font-weight: 400;
+}
+
+#studio-chat-result-path { color: var(--color-muted); font: 0.75rem var(--font-mono); overflow-wrap: anywhere; }
+
+#studio-editor .ace_marker-layer .studio-added-text {
+	position: absolute;
+	z-index: 3;
+	background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+	box-shadow: inset 0 -1px color-mix(in srgb, var(--color-primary) 65%, transparent);
+}
 
 #studio-image-preview:not([hidden]) {
 	display: grid;

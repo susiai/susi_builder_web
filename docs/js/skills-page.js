@@ -7,24 +7,30 @@
 	const install = get("install-skills");
 	const deleteDialog = get("delete-skill-dialog"), deleteName = get("delete-skill-name");
 	const markdown = window.markdownit({ html: false }).disable("image");
-	let vfs, paths = [], selected, request = 0, busy = false;
+	let skills, paths = [], selected, request = 0, busy = false;
 	let enabled = new Set();
 	let activationReady = false;
-	let defaultSkills = [];
+	let hasMissingDefaults = false;
 	let pendingDelete;
 
-	function missingDefaults() {
-		const present = new Set(paths.map(path => workspaceSkills.root + path));
-		return defaultSkills.filter(entry => !present.has(entry.path));
+	async function refreshDefaults() {
+		try {
+			hasMissingDefaults = (await skills.missingDefaults(paths)).length > 0;
+			install.title = "";
+		} catch (error) {
+			hasMissingDefaults = false;
+			install.title = "Could not read default skills. " + (error.message || error);
+		}
+		updateInstallButton();
 	}
 
 	function updateInstallButton() {
-		install.disabled = busy || missingDefaults().length === 0;
+		install.disabled = busy || !hasMissingDefaults;
 	}
 
 	function showList() {
 		const query = filter.value.trim().toLowerCase();
-		const rows = paths.filter(path => (path + " " + workspaceSkills.name(path)).toLowerCase().includes(query)).map(path => {
+		const rows = paths.filter(path => (path + " " + SkillLibrary.displayName(path)).toLowerCase().includes(query)).map(path => {
 			const row = document.createElement("div");
 			const toggle = document.createElement("input");
 			toggle.type = "checkbox";
@@ -63,7 +69,7 @@
 		showList();
 		if (!selected) return;
 		try {
-			const skill = await workspaceSkills.read(vfs, selected);
+			const skill = await skills.read(selected);
 			if (current !== request) return;
 			const doc = new DOMParser().parseFromString(markdown.render(skill.content), "text/html");
 			// A document heading sits under the Skills page heading.
@@ -77,7 +83,7 @@
 				link.rel = "noopener noreferrer";
 			}
 			preview.replaceChildren(...doc.body.childNodes);
-			edit.href = "code-studio.html?" + new URLSearchParams({ file: workspaceSkills.root + skill.path });
+			edit.href = "code-studio.html?" + new URLSearchParams({ file: skills.filePath(skill.path) });
 			preview.hidden = edit.hidden = false;
 			empty.hidden = true;
 			if (remember) pageSettings.save("skills", { file: skill.path });
@@ -120,11 +126,10 @@
 		if (deleteDialog.returnValue !== "delete" || !path || busy) return;
 		setBusy(true);
 		try {
-			// Revoke access first, so a reinstalled skill cannot inherit its previous approval.
-			enabled = await workspaceSkills.setEnabled(vfs, path, false);
-			await vfs.deleteTree(workspaceSkills.root + path);
+			enabled = await skills.delete(path);
 			const wasSelected = selected === path;
-			paths = await workspaceSkills.list(vfs);
+			paths = await skills.list();
+			await refreshDefaults();
 			await open(selected, false);
 			if (wasSelected) await pageSettings.save("skills", { file: selected ?? null });
 			const url = new URL(location.href);
@@ -148,7 +153,7 @@
 		const focused = document.activeElement === toggle;
 		setBusy(true);
 		try {
-			enabled = await workspaceSkills.setEnabled(vfs, path, checked);
+			enabled = await skills.setEnabled(path, checked);
 			status.textContent = checked ? `${path} is available to Chat agents.` : `${path} is disabled for Chat agents.`;
 		} catch (error) {
 			status.textContent = "Could not save skill activation. " + (error.message || error);
@@ -162,21 +167,16 @@
 		if (install.disabled) return;
 		setBusy(true);
 		try {
-			paths = await workspaceSkills.list(vfs);
-			let added = 0;
-			for (const entry of missingDefaults()) {
-				await vfs.fileSystem.mkdir(entry.path.slice(0, entry.path.lastIndexOf("/")), { recursive: true });
-				try {
-					await vfs.fileSystem.write(entry.path, entry.value, { exclusive: true });
-					added++;
-				} catch (error) { if (error.code !== "EEXIST") throw error; }
-			}
+			const added = await skills.installDefaults();
 			status.textContent = added ? `Added ${added} default ${added === 1 ? "skill" : "skills"}.` : "All default skills are already present.";
 		} catch (error) {
 			status.textContent = "Could not add defaults. " + (error.message || error);
 		} finally {
 			try {
-				paths = await workspaceSkills.list(vfs);
+				paths = await skills.list();
+				await refreshDefaults();
+				enabled = await skills.readEnabled();
+				activationReady = true;
 				await open(selected);
 			} catch (error) {
 				status.textContent = "Could not refresh the skill list. " + (error.message || error);
@@ -185,11 +185,11 @@
 	});
 
 	try {
-		vfs = await window.vfsReady;
-		paths = await workspaceSkills.list(vfs);
+		skills = new SkillLibrary(await window.vfsReady);
+		paths = await skills.list();
 		let activationError;
 		try {
-			enabled = await workspaceSkills.readEnabled(vfs);
+			enabled = await skills.readEnabled();
 			activationReady = true;
 		} catch (error) { activationError = error; }
 		const linked = new URL(location.href).searchParams.get("file");
@@ -204,21 +204,22 @@
 		return;
 	}
 
-	try {
-		defaultSkills = (await vfs.readDefaults(path => path.startsWith(workspaceSkills.root))).filter(entry => /\.md$/i.test(entry.path));
-		updateInstallButton();
-	} catch (error) {
-		install.title = "Could not read default skills. " + (error.message || error);
-	}
+	await refreshDefaults();
 
 	// Other workspace pages can add or remove skills while this page remains open.
 	window.addEventListener("focus", async () => {
 		if (busy) return;
 		try {
-			const current = await workspaceSkills.list(vfs);
-			if (busy || (current.length === paths.length && current.every((path, index) => path === paths[index]))) return;
+			const [current, approvals] = await Promise.all([skills.list(), skills.readEnabled()]);
+			if (busy) return;
+			enabled = approvals;
+			activationReady = true;
+			if (current.length === paths.length && current.every((path, index) => path === paths[index])) {
+				setBusy(false);
+				return;
+			}
 			paths = current;
-			updateInstallButton();
+			await refreshDefaults();
 			await open(selected, false);
 		} catch (error) {
 			status.textContent = "Could not refresh the skill list. " + (error.message || error);

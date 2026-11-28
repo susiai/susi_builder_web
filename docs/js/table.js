@@ -7,17 +7,17 @@
 	const scroller = $("grid-scroll"), dropLine = $("table-drop-line");
 	const pageSize = 100;
 	const formats = { xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", csv: "text/csv", jsonl: "application/x-ndjson", parquet: "application/octet-stream" };
-	const past = [], future = [];
-	let sheet, source, row = 0, col = 0, page = 0, revision = 0, saved = 0, sequence = 0;
+	let workbook;
+	let sheet, source, row = 0, col = 0, page = 0;
 	let busy = false, draft = false, inline = null, columnAction, listing = 0;
 	let drag;
-	let lastView, clipboard, pendingPaste, fillDrag, dataRevision = 0, savedData = 0;
+	let lastView, clipboard, pendingPaste, fillDrag;
 	let styles = new Map();
 	const fillHandle = document.createElement("button");
 	fillHandle.type = "button"; fillHandle.id = "fill-handle"; fillHandle.tabIndex = -1;
 	fillHandle.setAttribute("aria-label", "Drag to fill adjacent cells"); fillHandle.title = "Drag to fill adjacent cells";
 	let answers, savedAnswerVersion = 0, modelViewDirty = false;
-	const changed = () => draft || revision !== saved || answers.version !== savedAnswerVersion;
+	const changed = () => draft || workbook.dirty || answers.version !== savedAnswerVersion;
 	const basename = name => name.split("/").pop();
 	const letters = index => {
 		let name = "";
@@ -27,10 +27,11 @@
 
 	const Formula = tableCalc.Formula;
 	const extension = name => /\.xlsx$/i.test(name) ? "xlsx" : tableFormats.extension(name);
-	let tabs = [], calculate, resolvedRows, projectionSheet, projectionRevision, hasFormulas;
+	let calculate, resolvedRows, projectionSheet, projectionRevision, hasFormulas;
 	const inputText = v => v instanceof Formula ? v.expression : tableFormats.textValue(v);
 	function invalidate() {
-		calculate = tableCalc.calculator(tabs,prompt => answers.entries.get(prompt));
+		workbook.invalidateCalculation();
+		calculate = workbook.calculator;
 		projectionSheet = null;
 	}
 	function showModelProgress(state) {
@@ -55,7 +56,7 @@
 	}
 	function modelResult() {
 		// A completed answer can supply the argument of another LLM call.
-		answers.refresh(tabs,true);
+		answers.refresh(workbook.sheets,true);
 		invalidate(); viewRevision = searchRevision = undefined;
 		modelStatus();
 		modelViewDirty = true;
@@ -81,22 +82,22 @@
 	};
 	window.addEventListener("pagehide", event => { if (!event.persisted) answers?.controller.abort(); });
 	function values() {
-		if (sheet !== projectionSheet || revision !== projectionRevision) {
+		if (sheet !== projectionSheet || workbook.revision !== projectionRevision) {
 			hasFormulas = false;
 			resolvedRows = sheet.rows.map((cells,r) => {
 				if (!cells.some(v => v instanceof Formula)) return cells;
 				hasFormulas = true;
 				return cells.map((v,c) => v instanceof Formula ? calculate(sheet,r,c) : v);
 			});
-			projectionSheet = sheet; projectionRevision = revision;
+			projectionSheet = sheet; projectionRevision = workbook.revision;
 		}
 		return resolvedRows;
 	}
 	function needsWorkbook() {
-		if (sheet.charts?.length || tabs.length > 1 || sheet.format === "xlsx" || sheet.name !== "Sheet1") return true;
+		if (sheet.charts?.length || workbook.sheets.length > 1 || sheet.format === "xlsx" || sheet.name !== "Sheet1") return true;
 		values(); return hasFormulas;
 	}
-	function activate(next) {
+	function showSheet(next) {
 		if (sheet === next) return;
 		sheet.view = {row,col,anchor,sortLevels,filters:[...filters],query:$("find-value").value};
 		const view = next.view || {};
@@ -108,15 +109,15 @@
 	}
 	function drawTabs() {
 		const nav = $("worksheet-tabs");
-		if (nav.children.length !== tabs.length || tabs.some((tab,i) => nav.children[i].textContent !== tab.name)) {
-			nav.replaceChildren(...tabs.map(tab => {
+		if (nav.children.length !== workbook.sheets.length || workbook.sheets.some((tab,i) => nav.children[i].textContent !== tab.name)) {
+			nav.replaceChildren(...workbook.sheets.map(tab => {
 				const button = document.createElement("button"); button.textContent = tab.name;
-				button.onclick = () => { if (commit()) { activate(tab); render(true); } };
+				button.onclick = () => { if (commit()) { workbook.selectSheet(tab); render(true); } };
 				button.ondblclick = () => $("sheet-options").click();
 				button.draggable = true;
 				button.ondragstart = event => {
 					if (!commit()) { event.preventDefault(); return; }
-					event.dataTransfer.setData("application/x-susi-worksheet",String(tabs.indexOf(tab)));
+					event.dataTransfer.setData("application/x-susi-worksheet",String(workbook.sheets.indexOf(tab)));
 					event.dataTransfer.effectAllowed = "move";
 				};
 				button.ondragover = event => {
@@ -124,76 +125,38 @@
 				};
 				button.ondrop = event => {
 					const from = event.dataTransfer.getData("application/x-susi-worksheet");
-					if (!/^\d+$/.test(from) || !tabs[+from] || tabs[+from] === tab) return;
-					event.preventDefault(); activate(tabs[+from]); moveSheet(tabs.indexOf(tab)-Number(from));
+					if (!/^\d+$/.test(from) || !workbook.sheets[+from] || workbook.sheets[+from] === tab) return;
+					event.preventDefault(); workbook.selectSheet(workbook.sheets[+from]); moveSheet(workbook.sheets.indexOf(tab)-Number(from));
 				};
 				button.onkeydown = event => {
-					const index = tabs.indexOf(tab), next = {ArrowLeft:index-1,ArrowRight:index+1,Home:0,End:tabs.length-1}[event.key];
-					if (!tabs[next] || !commit()) return;
-					event.preventDefault(); activate(tabs[next]); render(); nav.children[next].focus();
+					const index = workbook.sheets.indexOf(tab), next = {ArrowLeft:index-1,ArrowRight:index+1,Home:0,End:workbook.sheets.length-1}[event.key];
+					if (!workbook.sheets[next] || !commit()) return;
+					event.preventDefault(); workbook.selectSheet(workbook.sheets[next]); render(); nav.children[next].focus();
 				};
 				return button;
 			}));
 		}
-		for (const [i,button] of [...nav.children].entries()) button.setAttribute("aria-current",String(tabs[i] === sheet));
+		for (const [i,button] of [...nav.children].entries()) button.setAttribute("aria-current",String(workbook.sheets[i] === sheet));
 	}
-	function uniqueName(base) {
-		const names = new Set(tabs.map(tab => tab.name.toLowerCase()));
-		for (let i = 1; ; i++) {
-			const suffix = String(i), name = base.slice(0,31-suffix.length) + suffix;
-			if (!names.has(name.toLowerCase())) return name;
-		}
-	}
-	function insertTab(next) {
-		const previous = sheet, i = tabs.indexOf(sheet) + 1;
-		change(() => { tabs.splice(i,0,next); activate(next); }, () => { activate(previous); tabs.splice(i,1); });
-		render(true);
-	}
-	$("sheet-add").onclick = () => { if (commit()) insertTab(tableWorkbook.empty(uniqueName("Sheet"))); };
+	$("sheet-add").onclick = () => { if (commit()) { workbook.addSheet(); render(true); } };
 	$("sheet-options").onclick = () => {
 		if (!commit()) return;
 		$("worksheet-name").value = sheet.name;
-		$("sheet-left").disabled = sheet === tabs[0]; $("sheet-right").disabled = sheet === tabs.at(-1);
+		$("sheet-left").disabled = sheet === workbook.sheets[0]; $("sheet-right").disabled = sheet === workbook.sheets.at(-1);
 		show($("worksheet-dialog")); $("worksheet-name").select();
 	};
-	function formulas(transform) {
-		const edits = [];
-		for (const tab of tabs) for (const cells of tab.rows) cells.forEach((v,c) => {
-			if (!(v instanceof Formula)) return;
-			const expression = transform(v.expression,tab);
-			if (expression !== v.expression) edits.push({cells,c,before:v,after:new Formula(expression)});
-		});
-		return edits;
-	}
 	$("worksheet-form").onsubmit = event => {
 		event.preventDefault();
-		const next = $("worksheet-name").value.trim(), before = sheet.name;
-		if (!next || next.length > 31 || /[\\/*?:\[\]]|^'|'$/.test(next) || next.toLowerCase() === "history" ||
-			tabs.some(tab => tab !== sheet && tab.name.toLowerCase() === next.toLowerCase())) {
-			status("Enter a unique Excel sheet name of up to 31 characters without / \\ * ? : [ ] or outer apostrophes.",true); return;
-		}
-		if (next !== before) {
-			const edits = formulas(expr => tableCalc.rename(expr,before,next));
-			change(() => { sheet.name = next; for (const e of edits) e.cells[e.c] = e.after; },
-				() => { sheet.name = before; for (const e of edits) e.cells[e.c] = e.before; });
-		}
+		try { workbook.renameSheet($("worksheet-name").value.trim()); }
+		catch (error) { status(error.message,true); return; }
 		$("worksheet-dialog").close(); render(true);
 	};
 	$("sheet-duplicate").onclick = () => {
-		const name = uniqueName(sheet.name + " "), next = tableWorkbook.empty(name,sheet.rows.length,sheet.columns.length);
-		next.charts = structuredClone(sheet.charts || []);
-		next.columns = sheet.columns.map(col => ({name:col.name}));
-		next.rows = sheet.rows.map(cells => cells.map(v => v instanceof Formula ? new Formula(tableCalc.rename(v.expression,sheet.name,name)) : v));
-		for (const [r,c,style] of styleRecords()) {
-			const cells = next.rows[r]; if (!next.styles.has(cells)) next.styles.set(cells,new Map());
-			next.styles.get(cells).set(next.columns[c],{...style});
-		}
-		$("worksheet-dialog").close(); insertTab(next);
+		workbook.duplicateSheet(); $("worksheet-dialog").close(); render(true);
 	};
 	function moveSheet(step) {
-		const i = tabs.indexOf(sheet), j = i + step;
-		const move = (from,to) => tabs.splice(to,0,tabs.splice(from,1)[0]);
-		change(() => move(i,j),() => move(j,i)); $("worksheet-dialog").close(); render(true);
+		workbook.moveSheet(workbook.sheets.indexOf(sheet)+step);
+		$("worksheet-dialog").close(); render(true);
 	}
 	$("sheet-left").onclick = () => moveSheet(-1); $("sheet-right").onclick = () => moveSheet(1);
 
@@ -202,9 +165,9 @@
 	let visibleColumns = [];
 	function columnProfile(c) {
 		const column = sheet.columns[c], cached = profiles.get(column);
-		if (cached?.revision === revision && cached.answerVersion === answers.version) return cached.profile;
+		if (cached?.revision === workbook.revision && cached.answerVersion === answers.version) return cached.profile;
 		const profile = tableOperations.profile(values(), c);
-		profiles.set(column, { revision, answerVersion:answers.version, profile }); return profile;
+		profiles.set(column, { revision:workbook.revision, answerVersion:answers.version, profile }); return profile;
 	}
 	const collator = new Intl.Collator(undefined, { numeric: true });
 	const kindOrder = { missing: 0, null: 1, boolean: 2, number: 3, text: 4, json: 5 };
@@ -232,7 +195,7 @@
 		return (cells,r) => tests.every(test => test(cells,r));
 	}
 	function rebuildView() {
-		if (viewRevision === revision) return;
+		if (viewRevision === workbook.revision) return;
 		const rows = values(), include = rowFilter();
 		visibleRows = [];
 		rows.forEach((cells,r) => { if (include(cells,r)) visibleRows.push(r); });
@@ -258,7 +221,7 @@
 			return i-j;
 		});
 		positions = new Map(visibleRows.map((r, i) => [r, i]));
-		viewRevision = revision;
+		viewRevision = workbook.revision;
 	}
 	function rangeBounds() {
 		const end = positions.get(anchor?.extent?.row ?? row), start = positions.get(anchor?.row) ?? end;
@@ -328,14 +291,21 @@
 	$("expand-bar").onclick = () => {
 		const expanded = $("cell-bar").toggleAttribute("data-expanded");
 		$("expand-bar").setAttribute("aria-expanded", expanded);
-		$("expand-bar").setAttribute("aria-label", expanded ? "Collapse formula bar" : "Expand formula bar");
-		$("expand-bar").title = $("expand-bar").getAttribute("aria-label");
+		updateBarLabel();
 	};
+
+	function updateBarLabel() {
+		const name = sheet.format === "xlsx" ? "formula bar" : "cell input";
+		const label = ($("cell-bar").hasAttribute("data-expanded") ? "Collapse " : "Expand ") + name;
+		$("expand-bar").setAttribute("aria-label",label);
+		$("expand-bar").title = label;
+		bar.setAttribute("aria-label",sheet.format === "xlsx" ? "Formula bar · cell contents" : "Cell contents");
+	}
 
 	function refreshMatches() {
 		const query = $("find-value").value.toLocaleLowerCase();
-		if (query !== searchQuery || revision !== searchRevision) {
-			searchQuery = query; searchRevision = revision; matches = [];
+		if (query !== searchQuery || workbook.revision !== searchRevision) {
+			searchQuery = query; searchRevision = workbook.revision; matches = [];
 			if (query) values().forEach((cells, r) => {
 				for (let c = 0; c < sheet.columns.length; c++) {
 					if (displayValue(cells[c]).toLocaleLowerCase().includes(query)) matches.push([r,c]);
@@ -432,36 +402,38 @@
 	}
 
 	function title() {
-		const newWorkbook = !source && needsWorkbook();
-		const name = source?.name || (newWorkbook ? "Untitled.xlsx" : "Untitled.csv");
+		const format = needsWorkbook() ? "xlsx" : sheet.format;
+		const converting = source && format !== extension(source.name);
+		const name = converting ? source.name.replace(/\.[^.]+$/, "." + format) : source?.name || ("Untitled." + format);
 		$("file-name").textContent = name + (changed() ? " *" : "");
 		$("unsaved").hidden = !changed();
-		const folder = source?.path?.slice(0, -name.length);
-		$("file-location").textContent = folder ? "Workspace · " + folder : source ? "Computer" : newWorkbook ? "New workbook" : "New table";
+		const folder = source?.path?.slice(0, -source.name.length);
+		$("file-location").textContent = converting ? "From " + source.name : folder ? "Workspace · " + folder :
+			source ? "Computer" : format === "xlsx" ? "New workbook" : "New table";
 		$("file-location").title = source?.path || "";
 		document.title = (changed() ? "* " : "") + name + " · " + pageTitle;
-		$("undo").disabled = !past.length;
-		$("redo").disabled = !future.length;
+		$("undo").disabled = !workbook.canUndo;
+		$("redo").disabled = !workbook.canRedo;
 	}
 
 	function reset(next, file, message, records = [], worksheets = [next]) {
-		clipboard = pendingPaste = null; dataRevision = savedData = 0;
+		clipboard = pendingPaste = null;
 		answers?.controller.abort();
 		answers = new tableModel.Answers(worksheets.modelAnswers,modelResult,showModelProgress);
 		savedAnswerVersion = 0;
-		tabs = worksheets; sheet = next; sheet.name ||= "Sheet1";
+		sheet = next;
 		// Tab buttons capture their worksheet. Rebind even when a reopened book has the same names.
 		$("worksheet-tabs").replaceChildren();
 		if (sheet.styles) styles = sheet.styles; else { restoreStyles(records); sheet.styles = styles; }
-		answers.sync(tabs,false); modelStatus();
-		invalidate(); source = file; row = col = page = revision = saved = sequence = 0;
+		workbook = bindWorkbook(worksheets,next);
+		answers.sync(workbook.sheets,false); modelStatus();
+		invalidate(); source = file; row = col = page = 0;
 		if (file?.path && lastView?.file === file.path) {
 			row = Number.isSafeInteger(lastView.row) ? lastView.row : 0;
 			col = Number.isSafeInteger(lastView.column) ? lastView.column : 0;
 		}
 		filters.clear(); sortLevels = []; anchor = null; viewRevision = searchRevision = undefined;
 		$("find-value").value = "";
-		past.length = future.length = 0;
 		draft = false; inline = null;
 		render(!busy);
 		if (message) status(message);
@@ -469,9 +441,42 @@
 
 	function empty() {
 		const columns = [1, 2, 3].map(n => ({ name: "Column " + n }));
-		const rows = Array.from({ length: tableWorkbook.defaultRowCount }, () => columns.map(() => ""));
+		const rows = Array.from({ length: Workbook.defaultRowCount }, () => columns.map(() => ""));
 		return { format: "csv", columns, rows };
 	}
+
+	async function switchMode(format) {
+		await run(async () => {
+			if (format === "csv" && answers.work) {
+				status("Waiting for formula results…");
+				await answers.settle();
+			}
+			workbook.switchMode(format);
+			$("mode-dialog").close();
+			clipboard = pendingPaste = null;
+			render();
+			status(format === "xlsx" ? "Workbook mode. Start a formula with = in any Auto cell." : "CSV mode. Cell entries are literal text.");
+		});
+		if (sheet.format === format) $("editing-mode").querySelector('[aria-pressed="true"]').focus();
+	}
+	$("editing-mode").onclick = event => {
+		const format = event.target.closest("button")?.dataset.mode;
+		if (!format || sheet.format === format || !commit()) return;
+		const warnings = workbook.modeChangeWarnings(format);
+		if (!warnings.length) { switchMode(format); return; }
+		const action = "Switch to " + (format === "csv" ? "CSV" : "Workbook");
+		$("mode-title").textContent = action + "?";
+		$("mode-losses").replaceChildren(...warnings.map(text => {
+			const item = document.createElement("li"); item.textContent = text; return item;
+		}));
+		$("confirm-mode").value = format;
+		$("confirm-mode").textContent = action;
+		show($("mode-dialog"));
+	};
+	$("mode-form").onsubmit = event => {
+		event.preventDefault();
+		switchMode($("confirm-mode").value);
+	};
 
 	function rememberView(file) {
 		const csv = source?.csv;
@@ -534,7 +539,7 @@
 		type.title = field ? "Parquet column type: " + tableParquet.fieldType(field.element) : "Cell value type";
 		bar.value = cell ? inputText(v) : "";
 		bar.removeAttribute("aria-invalid");
-		bar.placeholder = cell ? "Enter a value or =formula" : "";
+		bar.placeholder = cell ? (acceptsFormula(type.value,field) ? "Enter a value or =formula" : "Enter a value") : "";
 		bar.disabled = !cell || ["null", "missing"].includes(type.value);
 		$("insert-chart").disabled = !cell;
 		$("auto-sum").disabled = !cell || !acceptsFormula(type.value,field);
@@ -548,6 +553,7 @@
 		$("add-row").disabled = $("append-row").disabled = !sheet.columns.length && sheet.format !== "jsonl";
 		if (source?.path) rememberView(source.path);
 		referencePicker.update(true);
+		tableChat.refresh();
 	}
 
 	function renderRows(start,end) {
@@ -581,6 +587,12 @@
 	}
 	function render(focus = false, visiblePage) {
 		modelViewDirty = false;
+		const isWorkbook = sheet.format === "xlsx", isCsv = sheet.format === "csv";
+		$("editing-mode").hidden = !isWorkbook && !isCsv;
+		for (const button of $("editing-mode").children) button.setAttribute("aria-pressed",String(button.dataset.mode === sheet.format));
+		$("formula-help-button").hidden = $("auto-sum").hidden = $("workbook-help").hidden = isCsv;
+		$("sheet-strip").hidden = $("insert-chart").hidden = isCsv;
+		updateBarLabel();
 		if (drag?.active && visiblePage === undefined) endDrag(false);
 		inline = null; clearCellError(); rebuildView();
 		row = Math.min(Math.max(0, row), Math.max(0, sheet.rows.length - 1));
@@ -641,63 +653,34 @@
 	}
 
 	const chartPanel = tableChartPanel($,show,commit,charts => {
-		const before = sheet.charts;
-		change(() => { sheet.charts = charts; },() => { sheet.charts = before; },true);
+		workbook.setCharts(charts);
 		render(true);
 	});
 	$("insert-chart").onclick = () => {
 		if (commit()) chartPanel.open(selectedRange());
 	};
 
-	function change(apply, revert, presentation = false) {
-		if (clipboard) clipboard.marked = false;
-		anchor = null;
-		const owner = sheet, before = revision, after = ++sequence;
-		apply(); revision = after;
-		if (!presentation) { answers.sync(tabs,true); modelStatus(); }
-		invalidate();
-		const beforeData = dataRevision;
-		if (!presentation) dataRevision = after;
-		past.push({ owner, apply, revert, before, after, beforeData, afterData: dataRevision });
-		if (past.length > 100) past.shift();
-		future.length = 0;
+	function bindWorkbook(sheets,activeSheet) {
+		return new Workbook(sheets,{activeSheet, onSelect:showSheet, lookupAnswer:prompt => answers.entries.get(prompt),
+			onChange({dataChanged,moved}) {
+				styles = sheet.styles;
+				if (clipboard) clipboard.marked = false;
+				anchor = null;
+				if (moved?.axis === "row") row = moved.index;
+				if (moved?.axis === "column") col = moved.index;
+				if (dataChanged) { answers.sync(workbook.sheets,true); modelStatus(); }
+				calculate = workbook.calculator;
+				projectionSheet = null;
+			}});
 	}
-	function layoutChange(axis, apply, revert) {
-		const key = axis === "row" ? "rows" : "columns";
-		const before = sheet[key].slice(), charts = sheet.charts;
-		let edits, nextCharts;
-		change(() => {
-			apply();
-			if (!edits) {
-				const current = sheet[key], indices = new Map(current.map((item,i) => [item,i]));
-				const remap = i => i < before.length ? (indices.get(before[i]) ?? -1) : i + current.length - before.length;
-				nextCharts = charts?.map(chart => tableCharts.remap(chart,axis,remap,current.length > before.length));
-				edits = formulas((expr,tab) => tableCalc.relayout(expr,tab.name,sheet.name,axis,remap));
-			}
-			sheet.charts = nextCharts;
-			for (const e of edits) e.cells[e.c] = e.after;
-		}, () => {
-			sheet.charts = charts;
-			for (const e of edits) e.cells[e.c] = e.before;
-			revert();
-		});
-	}
+
 	function undo(redo) {
-		if (!commit()) return;
-		anchor = null;
-		const entry = (redo ? future : past).pop();
-		if (!entry) return;
-		if (clipboard) clipboard.marked = false;
-		activate(entry.owner);
-		dataRevision = redo ? entry.afterData : entry.beforeData;
-		if (redo) { entry.apply(); revision = entry.after; past.push(entry); }
-		else { entry.revert(); revision = entry.before; future.push(entry); }
-		if (entry.beforeData !== entry.afterData) { answers.sync(tabs,true); modelStatus(); }
-		invalidate(); render(true); status(redo ? "Change reapplied." : "Change undone.");
+		if (!commit() || !(redo ? workbook.redo() : workbook.undo())) return;
+		render(true); status(redo ? "Change reapplied." : "Change undone.");
 	}
 
 	function acceptsFormula(kind, field) {
-		return !field && (sheet.format === "csv" || (sheet.format === "xlsx" && kind !== "text"));
+		return sheet.format === "xlsx" && !field && kind !== "text";
 	}
 	function editValue(kind, text, field) {
 		if (acceptsFormula(kind,field) && text.startsWith("=")) return new Formula(text);
@@ -718,8 +701,8 @@
 				const cells = sheet.rows[row], c = col, field = sheet.columns[c].field;
 				const next = editValue(type.value, bar.value, field);
 				if (field) tableParquet.validate(field, next);
-				const e = cellEdit(cells,sheet.columns[c],c,next);
-				if (tableFormats.json(e.value) !== tableFormats.json(e.before) || e.style !== e.previousStyle) applyCells([e]);
+				const e = cellEdit(row,c,next);
+				if (tableFormats.json(e.value) !== tableFormats.json(cells[c]) || e.style !== styleAt(cells,sheet.columns[c])) applyCells([e]);
 			}
 		} catch (error) {
 			showCellError(error.message, inline || bar);
@@ -771,26 +754,7 @@
 		if (!columns && (sortLevels.length || filters.size)) { status("Clear filters and sort before moving rows."); return; }
 		const items = columns ? sheet.columns : sheet.rows;
 		if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length || !commit()) return;
-		function relocate(list, start, end) {
-			if (start >= list.length && end >= list.length) return;
-			const [value] = list.splice(start, 1);
-			// A short CSV record can move a real field beyond its current end.
-			if (end > list.length) list.length = end;
-			list.splice(end, 0, value);
-		}
-		function apply(start, end) {
-			relocate(items, start, end);
-			if (columns) {
-				for (const cells of sheet.rows) {
-					relocate(cells, start, end);
-					if (sheet.format === "csv") {
-						while (cells.length && cells[cells.length - 1] === undefined) cells.pop();
-					}
-				}
-				col = end;
-			} else row = end;
-		}
-		layoutChange(axis, () => apply(from, to), () => apply(to, from));
+		workbook.move(axis,from,to);
 		render(true);
 		status(columns ? `Column ${letters(from)} moved to ${letters(to)}.` : `Row ${from + 1} moved to ${to + 1}.`);
 	}
@@ -946,7 +910,7 @@
 	};
 	$("formula-help-button").onclick = formulaHelp;
 	document.addEventListener("keydown", event => {
-		if (event.key === "F1" && !busy && !document.querySelector("dialog[open]") && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+		if (event.key === "F1" && sheet && sheet.format !== "csv" && !busy && !document.querySelector("dialog[open]") && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
 			event.preventDefault(); formulaHelp();
 		}
 	});
@@ -1019,7 +983,7 @@
 			range = first === last ? first : first + ":" + last;
 			break;
 		}
-		const prefix = "=SUMME(";
+		const prefix = "=SUM(";
 		bar.focus();
 		bar.value = prefix + range + ")";
 		bar.setSelectionRange(prefix.length,prefix.length + range.length);
@@ -1090,7 +1054,7 @@
 		}
 		if (event.key === "Escape" && !editor) {
 			event.preventDefault(); pendingPaste = null;
-			if (clipboard?.marked && clipboard.cutEntry && clipboard.cutEntry === past.at(-1) && revision !== saved) undo(false);
+			if (clipboard?.marked && clipboard.cutRevision === workbook.revision && workbook.dirty) undo(false);
 			if (clipboard) clipboard.marked = false;
 			anchor = null; selection(true); return;
 		}
@@ -1358,7 +1322,7 @@
 						if (result === text) continue;
 						after = before instanceof Formula ? editValue("auto",result,sheet.columns[c].field) : pastedValue([tableFormats.kind(before), result], sheet.columns[c].field, before);
 					} else {
-						const text = replacement.startsWith("=") ? tableCalc.offset(replacement,r-row,c-col) : replacement;
+						const text = acceptsFormula("auto",sheet.columns[c].field) && replacement.startsWith("=") ? tableCalc.offset(replacement,r-row,c-col) : replacement;
 						after = pastedValue([null, text], sheet.columns[c].field, before);
 						if (after instanceof Date) after = replacement;
 					}
@@ -1410,18 +1374,10 @@
 	$("bulk-form").onsubmit = event => {
 		event.preventDefault();
 		if ($("bulk-apply").disabled || !bulkPlan || bulkPlan.errors) return;
-		const { field, schemaChange } = bulkPlan, column = sheet.columns[col], originalField = column?.field;
+		const {field,schemaChange} = bulkPlan;
 		const entries = bulkPlan.entries.filter(entry => entry.changed);
-		change(() => {
-			if (schemaChange) column.field = field;
-			for (const { r, c, after } of entries) sheet.rows[r][c] = after;
-		}, () => {
-			if (schemaChange) {
-				if (originalField) column.field = originalField; else delete column.field;
-			}
-			for (const { r, c, before, length } of entries) {
-				sheet.rows[r][c] = before; sheet.rows[r].length = length;
-			}
+		workbook.editCells(entries.map(e => ({row:e.r,column:e.c,value:e.after})), {
+			fieldChange: schemaChange ? {column:col,field} : undefined
 		});
 		$("bulk-dialog").close(); render(true);
 		status((schemaChange ? "Column type updated. " : "") + entries.length + " cells changed.");
@@ -1430,25 +1386,16 @@
 	const clipboardType = "application/x-susi-table-cells";
 	const clipboardToken = "application/x-susi-table-copy";
 	function styleAt(cells, column) { return styles.get(cells)?.get(column); }
-	function putStyle(cells, column, style) {
-		let map = styles.get(cells);
-		if (style && Object.keys(style).length) {
-			if (!map) styles.set(cells, map = new Map());
-			map.set(column, style);
-		} else if (map) {
-			map.delete(column); if (!map.size) styles.delete(cells);
-		}
-	}
 	function formatRange(update) {
 		if (!commit()) return;
 		const { rows, cols } = selectedRange(), edits = [], remembered = anchor;
 		for (const r of rows) for (const c of cols) {
 			const cells = sheet.rows[r], column = sheet.columns[c], before = styleAt(cells, column);
 			const next = update({ ...before });
-			if (JSON.stringify(before || {}) !== JSON.stringify(next)) edits.push({ cells, column, before, next });
+			if (JSON.stringify(before || {}) !== JSON.stringify(next)) edits.push({row:r,column:c,style:next});
 		}
 		if (!edits.length) return;
-		change(() => edits.forEach(e => putStyle(e.cells, e.column, e.next)), () => edits.forEach(e => putStyle(e.cells, e.column, e.before)), true);
+		workbook.editCells(edits);
 		anchor = remembered; render(true);
 	}
 	$("cell-condition").onchange = event => { const condition = event.target.value; formatRange(s => { if (condition) s.condition = condition; else delete s.condition; return s; }); };
@@ -1496,36 +1443,29 @@
 		if (field) tableParquet.validate(field, null);
 		return sheet.format === "csv" && !field ? "" : sheet.format === "xlsx" ? undefined : null;
 	}
-	function cellEdit(cells, column, c, value, style = styleAt(cells, column)) {
+	function cellEdit(r, c, value, style = styleAt(sheet.rows[r],sheet.columns[c])) {
 		if (value instanceof Date) {
 			value = tableWorkbook.serial(value);
 			style = {...style,format:"date"};
 		}
-		return { cells, column, c, value, style, before: cells[c], previousStyle: styleAt(cells, column), width: cells.length };
+		return {row:r,column:c,value,style};
 	}
-	function applyCells(edits, newRows = [], newCols = []) {
-		const nr = sheet.rows.length, nc = sheet.columns.length;
-		change(() => {
-			for (const column of newCols) sheet.columns.push(column);
-			for (const cells of newRows) sheet.rows.push(cells);
-			for (const e of edits) { e.cells[e.c] = e.value; putStyle(e.cells, e.column, e.style); }
-		}, () => {
-			for (const e of edits) { e.cells[e.c] = e.before; e.cells.length = e.width; putStyle(e.cells, e.column, e.previousStyle); }
-			sheet.rows.length = nr; sheet.columns.length = nc;
-		});
+	function applyCells(edits, newRows = [], newColumns = [], mergeWith) {
+		workbook.editCells(edits,{newRows,newColumns,mergeWith});
 	}
+
 	function cutSource(clip) {
 		const edits = [], keep = anchor;
 		try {
 			for (const r of clip.rows) for (const c of clip.cols) {
 				const cells = sheet.rows[r], column = sheet.columns[c];
 				if ((cells[c] == null || cells[c] === "") && !styleAt(cells,column)) continue;
-				try { edits.push(cellEdit(cells,column,c,clearedValue(c),null)); }
+				try { edits.push(cellEdit(r,c,clearedValue(c),null)); }
 				catch (error) { throw new Error(address(r,c) + " · " + error.message); }
 			}
 		} catch (error) { clipboard = null; selection(true); status(error.message,true); return false; }
 		if (edits.length) {
-			applyCells(edits); clip.cutEntry = past.at(-1); clip.marked = true; anchor = keep; render(true);
+			applyCells(edits); clip.cutRevision = workbook.revision; clip.marked = true; anchor = keep; render(true);
 		}
 		return true;
 	}
@@ -1535,9 +1475,9 @@
 			for (const r of rows) for (const c of cols) {
 				const cells = sheet.rows[r], column = sheet.columns[c];
 				try {
-					const text = bar.value.startsWith("=") ? tableCalc.offset(bar.value,r-row,c-col) : bar.value;
+					const text = acceptsFormula(type.value,column.field) && bar.value.startsWith("=") ? tableCalc.offset(bar.value,r-row,c-col) : bar.value;
 					const v = column.field ? pastedValue([type.value,text],column.field,cells[c]) : editValue(type.value,text,column.field);
-					edits.push(cellEdit(cells,column,c,v));
+					edits.push(cellEdit(r,c,v));
 				}
 				catch (err) { throw new Error(address(r,c) + " · " + err.message); }
 			}
@@ -1553,23 +1493,20 @@
 				if (cells[c] == null || cells[c] === "") continue;
 				let value;
 				try { value = clearedValue(c); } catch (error) { throw new Error(address(r,c) + " · " + error.message); }
-				edits.push(cellEdit(cells, sheet.columns[c], c, value));
+				edits.push(cellEdit(r, c, value));
 			}
 		} catch (error) { status(error.message, true); return; }
 		if (edits.length) { applyCells(edits); anchor = remembered; render(true); status("Cleared " + edits.length + " cells."); }
 	}
 	function pastedValue(entry, field, before, r, c, mode = "paste", moving = false) {
 		const [kind, text] = entry;
-		if (!field && ["csv","xlsx"].includes(sheet.format)) {
+		if (!field && sheet.format === "csv") return text;
+		if (!field && sheet.format === "xlsx") {
 			if (mode !== "values" && typeof entry[3] === "string" && entry[3].startsWith("=") && Number.isSafeInteger(entry[4]) && Number.isSafeInteger(entry[5]))
 				return new Formula(moving ? entry[3] : tableCalc.offset(entry[3],r-entry[4],c-entry[5]));
-			if (!kind && mode !== "values" && text.startsWith("=")) return new Formula(text);
-			if (sheet.format === "xlsx") {
-				if (mode === "values" && text.startsWith("=")) return text;
-				if (!kind || kind === "auto") return editValue("auto",text,field);
-				return tableFormats.parseCell(kind,text);
-			}
-			return text;
+			if (mode === "values" && text.startsWith("=")) return text;
+			if (!kind || kind === "auto") return editValue("auto",text,field);
+			return tableFormats.parseCell(kind,text);
 		}
 		let target = kind;
 		if (field) {
@@ -1584,9 +1521,6 @@
 		const value = tableFormats.parseCell(target, text);
 		if (field) tableParquet.validate(field, value);
 		return value;
-	}
-	function blankRow() {
-		return sheet.columns.map(column => column.field || sheet.values ? null : sheet.format === "csv" ? "" : undefined);
 	}
 	function pasteBlock(block, mode = "paste", cut = null) {
 		if (!block.length || !commit()) return;
@@ -1618,7 +1552,7 @@
 		}
 		for (let y = 0; y < height; y++) {
 			const r = visibleRows[top + y] ?? sheet.rows.length + newRows.length;
-			const cells = sheet.rows[r] || blankRow();
+			const cells = sheet.rows[r] || workbook.blankRow();
 			if (r >= sheet.rows.length) newRows.push(cells);
 			for (let x = 0; x < destinationWidth; x++) {
 				const entry = block[y % block.length][x % width]; if (!entry) continue;
@@ -1627,19 +1561,10 @@
 				try { value = pastedValue(entry, column.field, cells[c], r, c, mode, cut?.cut); }
 				catch (error) { if (positions.has(r) && sheet.columns[c]) move(r,c); throw new Error(address(r,c) + " · " + error.message); }
 				const style = mode === "values" || entry.length < 3 ? styleAt(cells,column) : cleanStyle(entry[2]);
-				edits.push(cellEdit(cells, column, c, value, style || null));
+				edits.push(cellEdit(r, c, value, style || null));
 			}
 		}
-		const cutEntry = cut?.cutEntry;
-		const joinCut = cutEntry && cut.marked && past.at(-1) === cutEntry && revision !== saved;
-		applyCells(edits, newRows, newCols);
-		if (joinCut) {
-			const paste = past.pop();
-			past.pop();
-			past.push({ ...paste, before: cutEntry.before, beforeData: cutEntry.beforeData,
-				apply() { activate(cutEntry.owner); cutEntry.apply(); activate(paste.owner); paste.apply(); },
-					revert() { activate(paste.owner); paste.revert(); activate(cutEntry.owner); cutEntry.revert(); } });
-		}
+		applyCells(edits, newRows, newCols, cut?.marked ? cut.cutRevision : undefined);
 		render(true); status("Pasted " + height + " × " + destinationWidth + " cells.");
 	}
 	function plainBlock(text) {
@@ -1666,8 +1591,7 @@
 		return records;
 	}
 	function restoreStyles(records) {
-		styles = new Map();
-		for (const [r,c,style] of records) if (sheet.rows[r] && sheet.columns[c]) putStyle(sheet.rows[r],sheet.columns[c],cleanStyle(style));
+		styles = Workbook.stylesFromRecords(sheet,records.map(([r,c,style]) => [r,c,cleanStyle(style)]));
 	}
 	function formatStorageKey(file) {
 		return "susi.table.formats." + (file.path ? "workspace:" + file.path : "local:" + file.name);
@@ -1709,35 +1633,22 @@
 		if (!commit()) return;
 		const selected = selectedRange().rows;
 		const index = selected.length ? (above ? selected[0] : selected.at(-1) + 1) : sheet.rows.length;
-		const added = Array.from({ length: Math.max(1, selected.length) }, blankRow);
-		layoutChange("row", () => { for (let i = 0; i < added.length; i++) sheet.rows.splice(index + i, 0, added[i]); },
-			() => sheet.rows.splice(index, added.length));
+		workbook.insertRows(index,Math.max(1,selected.length));
 		row = index; rebuildView(); if (!positions.has(row)) reveal(row,col,true); else render(true);
 	}
 	function deleteRows() {
 		if (!commit()) return;
-		const items = selectedRange().rows.sort((a,b) => a-b).map(r => [r, sheet.rows[r]]);
-		if (!items.length) return;
-		layoutChange("row", () => { for (let i = items.length - 1; i >= 0; i--) sheet.rows.splice(items[i][0],1); },
-			() => { for (const [r,cells] of items) sheet.rows.splice(r,0,cells); });
-		render(true); status("Deleted " + items.length + " rows.");
+		const indices = selectedRange().rows;
+		if (!indices.length) return;
+		workbook.deleteRows(indices);
+		render(true); status("Deleted " + indices.length + " rows.");
 	}
 	function deleteColumns() {
 		if (!commit() || sheet.values) return;
-		const indices = selectedRange().cols.sort((a,b) => a-b);
-		if (!indices.length || indices.length === sheet.columns.length) { status("Keep at least one column.", true); return; }
-		const columns = indices.map(c => sheet.columns[c]);
-		const originals = sheet.rows.map(cells => ({ width: cells.length, values: indices.map(c => cells[c]) }));
-		layoutChange("column", () => {
-			for (let i = indices.length - 1; i >= 0; i--) {
-				sheet.columns.splice(indices[i],1); for (const cells of sheet.rows) cells.splice(indices[i],1);
-			}
-		}, () => {
-			indices.forEach((c,i) => {
-				sheet.columns.splice(c,0,columns[i]);
-				sheet.rows.forEach((cells,r) => { if (c < originals[r].width) cells.splice(c,0,originals[r].values[i]); });
-			});
-		});
+		const indices = selectedRange().cols;
+		if (!indices.length) return;
+		try { workbook.deleteColumns(indices); }
+		catch (error) { status(error.message,true); return; }
 		render(true); status("Deleted " + indices.length + " columns.");
 	}
 	const contextMenu = $("cell-menu");
@@ -1792,7 +1703,7 @@
 			return;
 		}
 		let clip = clipboard, block = clip?.block;
-		const originalSheet = sheet, originalRevision = revision, destination = selectionAddress();
+		const originalSheet = sheet, originalRevision = workbook.revision, destination = selectionAddress();
 		try {
 			const text = await navigator.clipboard.readText();
 			if (!clip || text !== clip.text) { clip = null; block = plainBlock(text); }
@@ -1802,7 +1713,7 @@
 				status("Press Ctrl+V or Command+V to " + (action === "transpose" ? "paste transposed." : action === "values" ? "paste values only." : "paste.")); return;
 			}
 		}
-		if (sheet !== originalSheet || originalRevision !== revision || destination !== selectionAddress()) return;
+		if (sheet !== originalSheet || originalRevision !== workbook.revision || destination !== selectionAddress()) return;
 		pasteBlock(block, action, clip);
 	}
 	for (const button of document.querySelectorAll("[data-command]")) button.onclick = () => {
@@ -1873,11 +1784,11 @@
 			if (apply && dest) {
 				const edits = [], added = [];
 				for (let y=dest.top; y<=dest.bottom; y++) {
-					const r = visibleRows[y] ?? y, cells = sheet.rows[r] || blankRow();
+					const r = visibleRows[y] ?? y, cells = sheet.rows[r] || workbook.blankRow();
 					if (!sheet.rows[r]) added.push(cells);
 					for (let x=dest.left; x<=dest.right; x++) {
 						const c = visibleColumns[x], column = sheet.columns[c], entry = fillEntry(y,x,dest.vertical);
-						try { edits.push(cellEdit(cells,column,c,pastedValue(entry,column.field,cells[c],r,c),entry[2])); }
+						try { edits.push(cellEdit(r,c,pastedValue(entry,column.field,cells[c],r,c),entry[2])); }
 						catch (error) { throw new Error(address(r,c) + " · " + error.message); }
 					}
 				}
@@ -1936,8 +1847,7 @@
 	function appendRow() {
 		if (!commit()) return;
 		const r = sheet.rows.length;
-		const data = blankRow();
-		change(() => sheet.rows.splice(r, 0, data), () => sheet.rows.splice(r, 1));
+		workbook.appendRow();
 		row = r; rebuildView();
 		if (!positions.has(r)) reveal(r, col, true); else render(true);
 	}
@@ -1962,33 +1872,15 @@
 	$("column-form").onsubmit = event => {
 		event.preventDefault();
 		const name = $("column-name").value, c = col;
-		if (sheet.format !== "csv" && sheet.columns.some((v, i) => v.name === name && (columnAction === "add" || i !== c))) {
-			status("A column with this name already exists.", true); return;
-		}
-		const headerless = sheet.csv?.header === false;
-		if (columnAction === "rename") {
-			const column = sheet.columns[c], original = { ...column };
-			change(() => {
-				column.name = name; column.implicit = false;
-				if (headerless) sheet.csv.header = true;
-			}, () => {
-				Object.assign(column, { implicit: false }, original);
-				if (headerless) sheet.csv.header = false;
-			});
-		} else {
-			const column = { name };
-			if (sheet.format === "parquet") column.field = tableOperations.field(name, $("column-type").value.toLowerCase());
-			const index = sheet.columns.length, widths = sheet.rows.map(r => r.length);
-			change(() => {
-				sheet.columns.push(column);
-				if (headerless) sheet.csv.header = true;
-				sheet.rows.forEach(r => { r[index] = sheet.format === "csv" ? "" : null; });
-			}, () => {
-				sheet.columns.pop(); sheet.rows.forEach((r, i) => { r.length = widths[i]; });
-				if (headerless) sheet.csv.header = false;
-			});
-			col = index;
-		}
+		try {
+			if (columnAction === "rename") workbook.renameColumn(c,name);
+			else {
+				const column = {name};
+				if (sheet.format === "parquet") column.field = tableOperations.field(name, $("column-type").value.toLowerCase());
+				workbook.appendColumn(column);
+				col = sheet.columns.length-1;
+			}
+		} catch (error) { status(error.message,true); return; }
 		$("column-dialog").close(); render(true);
 	};
 	$("remove-column").onclick = deleteColumns;
@@ -2068,7 +1960,7 @@
 		await openFile({ name: basename(absolute), path: absolute }, await vfs.fileSystem.readFile(absolute), options);
 	}
 	function discard() { return !changed() || window.confirm("Discard the unsaved table edits?"); }
-	$("new-workbook").onclick = () => { if (discard()) { reset(tableWorkbook.empty(),null,"New workbook."); updateUrl(); } };
+	$("new-workbook").onclick = () => { if (discard()) { reset(Workbook.createSheet(),null,"New workbook."); updateUrl(); } };
 	$("new-table").onclick = () => {
 		if (discard()) { reset(empty(), null, "New table."); updateUrl(); }
 	};
@@ -2117,7 +2009,13 @@
 	}
 	function formatNote() {
 		const target = $("save-format").value;
-		if (target === "xlsx") { $("format-note").textContent = "Save all " + tabs.length + " worksheet(s), including formulas, formatting and charts." + (source?.externalWorkbook ? " The edited copy includes the cell data, formulas and formats supported by this editor." : ""); return; }
+		if (target === "xlsx") {
+			const notes = ["Save all " + workbook.sheets.length + " worksheet(s), including formulas, formatting and charts."];
+			if (sheet.format === "csv") notes.push(...workbook.modeChangeWarnings("xlsx"));
+			if (source?.externalWorkbook) notes.push("The edited copy includes the cell data, formulas and formats supported by this editor.");
+			$("format-note").textContent = notes.join(" ");
+			return;
+		}
 		const notes = {
 			csv: "CSV stores text. Null and missing values become empty fields. Nested values use JSON text.",
 			jsonl: "Each row becomes one JSON value. Object fields missing from a row are omitted. Empty files have no column names.",
@@ -2186,14 +2084,14 @@
 				if (extension(name) !== format) throw new Error("The file extension must match the selected format.");
 			} catch (error) { if (error.name !== "SecurityError" && error.name !== "NotAllowedError") throw error; }
 		}
-		const workbook = format === "xlsx", flatExport = !workbook && needsWorkbook();
+		const xlsx = format === "xlsx", flatExport = !xlsx && needsWorkbook();
 		const separate = exportRows || flatExport;
 		if (answers.work) { status("Waiting for model answers before saving…"); await answers.settle(); }
-		const original = !separate && source && !source.newParquet && (workbook ? revision === saved && answers.version === savedAnswerVersion : dataRevision === savedData) && format === extension(source.name);
-		const bytes = original ? source.snapshot.bytes : workbook ? await tableWorkbook.write(tabs,calculate,answers.records()) :
+		const original = !separate && source && !source.newParquet && (xlsx ? !workbook.dirty && answers.version === savedAnswerVersion : !workbook.dataDirty) && format === extension(source.name);
+		const bytes = original ? source.snapshot.bytes : xlsx ? await tableWorkbook.write(workbook.sheets,calculate,answers.records()) :
 			tableFormats.write(exportRows ? exportSheet() : flatExport ? {...sheet,rows:values(),originalRows:undefined} : sheet, format);
 		// Reopen conversions and Parquet encodings. Native JSONL saves retain the displayed order of sparse columns.
-		const next = !workbook && !separate && !original && (format === "parquet" || sheet.format !== format) ? await tableFormats.read(format, bytes) : sheet;
+		const next = !xlsx && !separate && !original && (format === "parquet" || sheet.format !== format) ? await tableFormats.read(format, bytes) : sheet;
 		const snapshot = { bytes };
 		if (workspace) {
 			const fs = (await window.vfsReady).fileSystem;
@@ -2227,9 +2125,9 @@
 		if (separate) {
 			status("Exported " + (exportRows ? visibleRows.length : sheet.rows.length) + " rows to " + (path || name) + "."); return;
 		}
-		source = { name, path, handle, snapshot, externalWorkbook:workbook && original && source?.externalWorkbook, csv: format === "csv" ? { header: next.csv?.header !== false, delimiter: next.csv?.delimiter || "," } : undefined };
-		if (workbook && tabs.some(tab => tab.format !== "xlsx")) {
-			const book = await tableWorkbook.read(bytes), active = tabs.indexOf(sheet);
+		source = { name, path, handle, snapshot, externalWorkbook:xlsx && original && source?.externalWorkbook, csv: format === "csv" ? { header: next.csv?.header !== false, delimiter: next.csv?.delimiter || "," } : undefined };
+		if (xlsx && workbook.sheets.some(tab => tab.format !== "xlsx")) {
+			const book = await tableWorkbook.read(bytes), active = workbook.sheets.indexOf(sheet);
 			reset(book[active],source,"Saved " + (path || name) + ".",[],book); updateUrl(path); return;
 		}
 		if (sheet !== next) {
@@ -2243,16 +2141,17 @@
 				if (widths.has(previous[c])) widths.set(column, widths.get(previous[c]));
 			});
 			sortLevels = sortLevels.map(({column,order}) => ({column:next.columns[previous.indexOf(column)],order})).filter(level => level.column);
-			tabs = [next]; next.name = sheet.name; sheet = next; restoreStyles(records); sheet.styles = styles; invalidate(); past.length = future.length = 0; anchor = null; viewRevision = searchRevision = undefined;
+			next.name = sheet.name; sheet = next; restoreStyles(records); sheet.styles = styles;
+			workbook = bindWorkbook([next],next); invalidate(); anchor = null; viewRevision = searchRevision = undefined;
 		}
-		saved = revision; savedData = dataRevision; savedAnswerVersion = answers.version;
-		const formatStatus = workbook ? "" : await storeStyles(source,bytes,source.csv);
+		workbook.markSaved(); savedAnswerVersion = answers.version;
+		const formatStatus = xlsx ? "" : await storeStyles(source,bytes,source.csv);
 		render(); updateUrl(path);
 		status((downloaded ? "Downloaded " + name + "." : "Saved " + (path || name) + ".") + formatStatus);
 	}
 	$("save-table").onclick = () => {
 		if (!commit()) return;
-		if (!source || (source.externalWorkbook && changed()) || (needsWorkbook() && extension(source.name) !== "xlsx")) { saveDialog(); return; }
+		if (!source || (source.externalWorkbook && changed()) || extension(source.name) !== (needsWorkbook() ? "xlsx" : sheet.format)) { saveDialog(); return; }
 		run(() => save(source, extension(source.name), false));
 	};
 	$("save-form").onsubmit = event => {
@@ -2277,7 +2176,29 @@
 		}
 	});
 	window.addEventListener("beforeunload", event => { if (changed() || busy) { event.preventDefault(); event.returnValue = ""; } });
-	reset(tableWorkbook.empty(), null);
+	const tableChat = mountTableChat({
+		context(includeSelection) {
+			const documentName = (source?.name || "Untitled").replace(/\.[^.]+$/,"") + "." + sheet.format;
+			return {book:workbook,sheet, selection:includeSelection && anchor ? selectedRange() : null,
+				active:grid.querySelector("td[data-selected]") ? {row,col} : null,
+				documentName,name:sheet.format === "csv" ? documentName : sheet.name,
+				draft,busy,answerVersion:answers.version};
+		},
+		prepare() {
+			if (busy) return false;
+			const marked = anchor;
+			if (!commit()) return false;
+			if (marked && !anchor) { anchor = marked; render(); }
+			return true;
+		},
+		apply(session) {
+			const marked = anchor;
+			session.apply(workbook);
+			anchor = marked; render();
+		},
+		focusGrid() { grid.querySelector("td[data-selected]")?.focus(); }
+	});
+	reset(Workbook.createSheet(), null);
 	const requested = new URLSearchParams(location.search).get("file");
 	const initialSheet = sheet;
 	async function restoreTable(settings) {

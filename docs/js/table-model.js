@@ -5,19 +5,19 @@
 const tableModel = (() => {
 	async function ask(prompt, signal, report) {
 		const config = await readLLMConfig();
-		const options = llmClient.requestOptions(config);
+		signal.throwIfAborted();
+		const client = llmClient.create({readApiKey:readLLMApiKey});
+		const {options, canPrepareOnDemand} = client.selectModel(config);
 		if (!options.model?.trim()) throw new Error("Select a chat model in Models.");
 		const messages = [];
 		if (config.systemprompt) messages.push({role:"system",content:config.systemprompt});
 		messages.push({role:"user",content:prompt});
-		signal.throwIfAborted();
-		const client = llmClient.create({readApiKey:readLLMApiKey});
-		report({message:options.provider === "browser" ? "Preparing the browser model…" : "Waiting for " + options.model + " to reply…"});
-		const response = await client.completeChat({...options,messages,signal,
+		report({message:canPrepareOnDemand ? "Preparing the browser model…" : "Waiting for " + options.model + " to reply…"});
+		const {message} = await client.completeChat({...options,messages,signal,
 			onProgress: state => report(state.ready ? {message:"Generating a reply with " + state.label + "…"} : state),
 			onStatus: message => report({message})
 		});
-		const answer = response.choices?.[0]?.message?.content;
+		const answer = message.content;
 		if (typeof answer !== "string") throw new Error("The model returned no text answer.");
 		return answer;
 	}

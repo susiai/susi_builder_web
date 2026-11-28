@@ -1,0 +1,81 @@
+select:where(:not([multiple], [size]), :is([size="0"], [size="1"]):not([multiple])) {
+	appearance: none;
+	padding: 0.3rem 1.6rem 0.3rem 0.65rem;
+	border: 1px solid var(--color-border, GrayText);
+	border-radius: var(--radius, 0.18rem);
+	line-height: 1.45;
+	background-image:
+		linear-gradient(45deg, transparent 50%, currentColor 50%),
+		linear-gradient(135deg, currentColor 50%, transparent 50%);
+	background-position: right 0.85rem center, right 0.6rem center;
+	background-size: 0.25rem 0.25rem;
+	background-repeat: no-repeat;
+}
+
+select:focus-visible {
+	outline: 1px solid var(--color-primary, Highlight);
+	outline-offset: -1px;
+}
+
+.select-picker:popover-open {
+	position: fixed;
+	inset: 0 auto auto 0;
+	box-sizing: border-box;
+	height: 1px;
+	max-height: 100vh;
+	margin: 0;
+	padding: 0;
+	overflow: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+	border: 1px solid var(--color-border, GrayText);
+	border-radius: var(--radius, 0.18rem);
+	outline: none;
+	background: var(--color-background-box, Canvas);
+	color: var(--color-text, CanvasText);
+}
+
+/* A short menu clips the native listbox's scrollbar gutter at the panel edge. */
+div.select-picker:popover-open { overflow: hidden; }
+div.select-picker > select {
+	display: block;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	background: inherit;
+	color: inherit;
+	font: inherit;
+	overflow-x: hidden;
+	scrollbar-width: none;
+}
+
+.select-picker option:not([hidden]) {
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	min-height: var(--picker-row-height);
+	padding: 0 var(--picker-inset);
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.select-picker option + option { border-top: 1px solid var(--color-line, ButtonFace); }
+.select-picker option:enabled:hover { background: var(--color-surface-raised, ButtonFace); }
+.select-picker option:checked {
+	/* Paint over the native listbox highlight while retaining native selection. */
+	color: var(--color-primary, HighlightText);
+	-webkit-text-fill-color: var(--color-primary, HighlightText);
+	box-shadow: inset 2px 0 var(--color-primary, HighlightText), inset 0 0 0 100vmax var(--color-accent-soft, Highlight);
+}
+.select-picker option:disabled { color: var(--color-muted, GrayText); }
+
+@media (forced-colors: active) {
+	select:where(:not([multiple], [size]), :is([size="0"], [size="1"]):not([multiple])) {
+		appearance: auto;
+		background-image: none;
+	}
+}

@@ -16,7 +16,7 @@ html:has(#console-page) {
 
 #console {
 	display: grid;
-	grid-template-rows: auto minmax(0, 1fr) auto auto;
+	grid-template-rows: auto minmax(0, 1fr) auto auto auto;
 	min-height: 0;
 	background: var(--color-surface-inset);
 }
@@ -125,3 +125,8 @@ html:has(#console-page) {
 	}
 }
 
+#console-chat-result .prompt-chat-output { white-space: normal; }
+#console-chat-result .prompt-chat-output > * + * { margin-block-start: 0.65rem; }
+#console-chat-result pre { max-width: 100%; overflow: auto; white-space: pre; }
+#console-chat-inserted { color: var(--color-muted); font-size: 0.8rem; }
+#console-chat .prompt-chat-status[data-error] { color: var(--color-accent-detail); }

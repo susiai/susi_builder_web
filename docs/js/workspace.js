@@ -67,7 +67,7 @@
 		// Pinned model downloads can be restored from their sources and exceed the archive limit.
 		const entries = snapshot.entries.filter(({ path }) =>
 			!modelPaths.has(path.replace(/^\.webstation\/apps\/[a-f0-9]{32}\/chat\//, "")));
-		return susiBackup.encode({ ...snapshot, entries }, { local });
+		return vfs.archive.encodeBackup({ ...snapshot, entries }, { local });
 	}
 
 	function download(result, stem = "workspace-backup") {
@@ -96,13 +96,13 @@
 		clearInspection();
 		const request = readRequest;
 		notice("Validating workspace backup…");
-		const snapshot = await susiBackup.decode(file, restorePassphrase.value);
+		const snapshot = await vfs.archive.decodeBackup(file, restorePassphrase.value);
 		const current = await vfs.recovery.read();
 		const expectedDigest = await vfsSnapshotDigest(current.entries);
 		if (request !== readRequest) return;
 		inspected = { snapshot, expectedDigest };
 		let endpoint = "";
-		try { endpoint = JSON.parse(snapshot.entries.find(entry => entry.path === "config.json")?.value || "{}").apihost || ""; }
+		try { endpoint = WorkspaceConfigStore.parse(snapshot.entries.find(entry => entry.path === "config.json")?.value).apihost || ""; }
 		catch { /* Keep the backup summary available with a malformed model configuration. */ }
 		$("backup-summary").textContent = `${snapshot.entries.length} file/folder entries, ` +
 			`${snapshot.local.length} conversation/preferences records. ` + (endpoint ? `Model endpoint in backup: ${endpoint}.` : "");
@@ -119,22 +119,7 @@
 	restoreConfirm.onclick = () => run(async () => {
 		if (!inspected) return;
 		const { snapshot, expectedDigest } = inspected;
-		// Restored executions are historical records, never resumable owners of project writes.
-		const activity = snapshot.entries.find(entry => entry.path === ".webstation/workspace.json");
-		if (typeof activity?.value === "string") {
-			try {
-				const state = JSON.parse(activity.value);
-				for (const run of state.runs || []) if (run.status === "running") {
-					run.status = "interrupted";
-					run.leaseUntil = 0;
-					run.error = "Restored from backup; review files before starting a new run.";
-					const task = state.tasks?.find(task => task.latestRun === run.id);
-					if (task) task.status = "interrupted";
-				}
-				activity.value = JSON.stringify(state, null, 2);
-			} catch { /* Preserve malformed user data for repair in Code Studio. */ }
-		}
-		await susiBackup.restore(vfs, snapshot, expectedDigest);
+		await vfs.recovery.restore(snapshot, expectedDigest);
 		try { sessionStorage.setItem("webstation.backup-restored", "1"); } catch {}
 		location.reload();
 	}, error => { $("backup-restore-error").textContent = error.message || String(error); });
@@ -176,7 +161,7 @@
 		resetStatus.textContent = "";
 		try {
 			if (clearWorkspace) {
-				await susiBackup.clearWorkspace(() => {
+				await clearVfsWorkspace(() => {
 					resetError.textContent = "Close other tabs using this workspace to finish clearing the database.";
 				});
 				vfs = null;
